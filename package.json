@@ -6,12 +6,14 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
-    "build:dir": "electron-builder --win --dir"
+    "build:dir": "electron-builder --win --dir",
+    "build:signed": "electron-builder --win --publish never",
+    "build:publish": "electron-builder --win --publish always"
   },
   "author": "obichan",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.0.0",
+    "electron": "28.3.3",
     "electron-builder": "^24.9.1"
   },
   "build": {
@@ -23,6 +25,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "device-id.js",
+      "license-manager.js",
       "app/**/*",
       "assets/**/*"
     ],
@@ -30,12 +34,12 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
-      "signingHashAlgorithms": [],
-      "sign": null,
       "fileAssociations": [
         {
           "ext": "pdf",
@@ -52,6 +56,14 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Obi-Tool"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "najimi0219",
+      "repo": "obi-tool-app"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
