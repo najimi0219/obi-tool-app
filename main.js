@@ -159,6 +159,8 @@ function createWindow() {
 
 // ===== Application Menu =====
 function buildMenu() {
+  const licInfo = licenseManager.getLicenseInfo();
+  const isAdmin = licInfo && licInfo.isAdmin === true;
   const template = [
     {
       label: 'ファイル',
@@ -196,14 +198,14 @@ function buildMenu() {
             switchMode('viewer');
           }
         },
-        {
+        ...(isAdmin ? [{
           label: '管理者モード (開発)',
           type: 'radio',
           checked: currentMode === 'admin',
           click: () => {
             switchMode('admin');
           }
-        },
+        }] : []),
       ]
     },
     {
@@ -221,14 +223,16 @@ function buildMenu() {
             removeDefaultPdfApp();
           }
         },
-        { type: 'separator' },
-        {
-          label: '開発者ツール',
-          accelerator: 'F12',
-          click: () => {
-            mainWindow.webContents.toggleDevTools();
+        ...(isAdmin ? [
+          { type: 'separator' },
+          {
+            label: '開発者ツール',
+            accelerator: 'F12',
+            click: () => {
+              mainWindow.webContents.toggleDevTools();
+            }
           }
-        }
+        ] : []),
       ]
     },
     {
@@ -426,19 +430,27 @@ ipcMain.handle('get-app-info', () => {
 
 // ===== License Handlers =====
 ipcMain.handle('license-login', async (event, email, password) => {
-  return await licenseManager.login(email, password);
+  const result = await licenseManager.login(email, password);
+  buildMenu(); // ログイン後にメニュー再構築
+  return result;
 });
 
 ipcMain.handle('license-logout', async () => {
-  return await licenseManager.logout();
+  const result = await licenseManager.logout();
+  buildMenu(); // ログアウト後にメニュー再構築
+  return result;
 });
 
 ipcMain.handle('license-register', async (event, email, password) => {
-  return await licenseManager.register(email, password);
+  const result = await licenseManager.register(email, password);
+  buildMenu();
+  return result;
 });
 
 ipcMain.handle('license-verify', async () => {
-  return await licenseManager.verifyLicense();
+  const result = await licenseManager.verifyLicense();
+  buildMenu();
+  return result;
 });
 
 ipcMain.handle('license-info', () => {
@@ -451,6 +463,14 @@ ipcMain.handle('license-checkout', async (event, promoCode) => {
 
 ipcMain.handle('license-portal', async () => {
   return await licenseManager.getPortalUrl();
+});
+
+ipcMain.handle('apply-promo-code', async (event, code) => {
+  return await licenseManager.applyPromoCode(code);
+});
+
+ipcMain.handle('cancel-subscription', async () => {
+  return await licenseManager.cancelSubscription();
 });
 
 ipcMain.handle('get-device-info', () => {
@@ -575,7 +595,7 @@ function setupAutoUpdater() {
   // 開発中はスキップ
   if (!app.isPackaged) return;
 
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   // アップデート確認（起動後10秒待ってから）

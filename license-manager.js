@@ -281,6 +281,45 @@ async function getPortalUrl() {
 }
 
 /**
+ * サブスクリプション解約
+ */
+async function cancelSubscription() {
+  const cache = loadCache();
+  if (!cache || !cache.token) {
+    return { success: false, message: 'ログインしてください' };
+  }
+  try {
+    const result = await apiRequest('/api/stripe/cancel', { token: cache.token });
+    if (result.success) {
+      await verifyLicense();
+    }
+    return result;
+  } catch (e) {
+    return { success: false, message: 'エラーが発生しました' };
+  }
+}
+
+/**
+ * プロモーションコードを適用
+ */
+async function applyPromoCode(code) {
+  const cache = loadCache();
+  if (!cache || !cache.token) {
+    return { success: false, message: 'ログインしてください' };
+  }
+  try {
+    const result = await apiRequest('/api/stripe/apply-promo', { token: cache.token, promoCode: code });
+    if (result.success) {
+      // キャッシュのプラン情報も更新するためverifyを再実行
+      await verifyLicense();
+    }
+    return result;
+  } catch (e) {
+    return { success: false, message: 'エラーが発生しました' };
+  }
+}
+
+/**
  * 現在のキャッシュ情報を取得（UI表示用）
  */
 function getLicenseInfo() {
@@ -304,6 +343,8 @@ module.exports = {
   verifyLicense,
   getCheckoutUrl,
   getPortalUrl,
+  applyPromoCode,
+  cancelSubscription,
   getLicenseInfo,
   clearCache
 };

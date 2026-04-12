@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   licenseInfo: () => ipcRenderer.invoke('license-info'),
   licenseCheckout: (promoCode) => ipcRenderer.invoke('license-checkout', promoCode),
   licensePortal: () => ipcRenderer.invoke('license-portal'),
+  applyPromoCode: (code) => ipcRenderer.invoke('apply-promo-code', code),
+  cancelSubscription: () => ipcRenderer.invoke('cancel-subscription'),
   getDeviceInfo: () => ipcRenderer.invoke('get-device-info'),
 
   // App info

@@ -214,6 +214,9 @@
     }
     .thumb-item:hover { border-color: var(--border); }
     .thumb-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .thumb-item.multi-selected { border-color: #3b82f6; background: rgba(59,130,246,0.10); box-shadow: 0 0 0 1px #3b82f6; }
+    .thumb-item.multi-selected .thumb-label { color: #3b82f6; font-weight: 600; }
+    .thumb-item.active.multi-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px rgba(59,130,246,0.3); }
     .thumb-item.drag-over { border-color: var(--success); background: rgba(68,170,153,0.1); }
     .thumb-item canvas { display: block; width: 100%; height: auto; border-radius: 3px; pointer-events: none; }
     .thumb-label {
@@ -298,22 +301,15 @@
     .canvas-container {
       position: relative;
       display: inline-block;
-      max-width: 100%;
-      transform-origin: 0 0;
       transition: none;
+      flex-shrink: 0;
     }
     .canvas-container canvas {
       display: block;
-      max-width: 100%;
+      width: 100%;
       height: auto;
       border-radius: 2px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    .canvas-container.zoomed {
-      max-width: none;
-    }
-    .canvas-container.zoomed canvas {
-      max-width: none;
     }
 
     /* ズームインジケーター */
@@ -438,6 +434,10 @@
     .white-box-handle[data-handle="tr"] { top: -5px; right: -5px; cursor: nesw-resize; }
     .white-box-handle[data-handle="bl"] { bottom: -5px; left: -5px; cursor: nesw-resize; }
     .white-box-handle[data-handle="br"] { bottom: -5px; right: -5px; cursor: nwse-resize; }
+    .white-box-handle[data-handle="tm"] { top: -5px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+    .white-box-handle[data-handle="bm"] { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+    .white-box-handle[data-handle="ml"] { top: 50%; left: -5px; transform: translateY(-50%); cursor: w-resize; }
+    .white-box-handle[data-handle="mr"] { top: 50%; right: -5px; transform: translateY(-50%); cursor: e-resize; }
 
     /* ===== 編集オブジェクト (画像・テキスト・図形) ===== */
     .edit-object {
@@ -450,7 +450,7 @@
       will-change: left, top, width, height;
     }
     .edit-object.selected { border-color: #2196F3; }
-    .edit-object img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .edit-object img { width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
     .edit-object .edit-text {
       width: 100%; height: 100%;
       border: none; outline: none;
@@ -514,6 +514,10 @@
     .edit-object.selected .shape-settings-bar { display: flex; }
     .edit-obj-handle.tl { top: -4px; left: -4px; cursor: nw-resize; }
     .edit-obj-handle.tr { top: -4px; right: -4px; cursor: ne-resize; }
+    .edit-obj-handle.tm { top: -4px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+    .edit-obj-handle.bm { bottom: -4px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+    .edit-obj-handle.ml { top: 50%; left: -4px; transform: translateY(-50%); cursor: w-resize; }
+    .edit-obj-handle.mr { top: 50%; right: -4px; transform: translateY(-50%); cursor: e-resize; }
     /* 多角形頂点ハンドル */
     .polygon-vtx-handle {
       position: absolute; width: 10px; height: 10px;
@@ -720,7 +724,12 @@
       background: var(--bg);
       border-bottom: 1px solid var(--border);
       min-height: 32px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
     }
+    .toolbar::-webkit-scrollbar { height: 3px; }
+    .toolbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     .toolbar-group {
       display: flex;
       align-items: center;
@@ -816,7 +825,7 @@
     /* テキスト設定バー */
     .text-settings-bar {
       position: absolute; top: -36px; left: 0;
-      display: flex; gap: 4px; align-items: center;
+      gap: 4px; align-items: center;
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 6px; padding: 4px 8px; box-shadow: var(--shadow);
       z-index: 30; white-space: nowrap;
@@ -950,6 +959,7 @@
       <symbol id="i-polygon" viewBox="0 0 24 24"><polygon points="12,2 22,8 20,20 6,22 2,10" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="2" r="2" fill="currentColor"/><circle cx="22" cy="8" r="2" fill="currentColor"/><circle cx="20" cy="20" r="2" fill="currentColor"/><circle cx="6" cy="22" r="2" fill="currentColor"/><circle cx="2" cy="10" r="2" fill="currentColor"/></symbol>
       <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M4 2l12 14H9.5L13 22l-3 1-3.5-6.5L3 19V2h1z" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
       <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+      <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></symbol>
     </defs>
   </svg>
 
@@ -967,7 +977,8 @@
       <div class="menu-dropdown" id="menu-file">
         <div class="menu-dropdown-item" id="menuOpenPdf"><span class="icon-svg"><svg><use href="#i-folder-open"/></svg></span>PDFを開く</div>
         <div class="menu-sep"></div>
-        <div class="menu-dropdown-item disabled" id="menuSavePdf"><span class="icon-svg"><svg><use href="#i-save"/></svg></span>PDF保存<span class="shortcut">Ctrl+S</span></div>
+        <div class="menu-dropdown-item disabled" id="menuOverwriteSave"><span class="icon-svg"><svg><use href="#i-save"/></svg></span>上書き保存<span class="shortcut">Ctrl+S</span></div>
+        <div class="menu-dropdown-item disabled" id="menuSavePdf"><span class="icon-svg"><svg><use href="#i-save"/></svg></span>名前を付けて保存<span class="shortcut">Ctrl+Shift+S</span></div>
         <div class="menu-dropdown-item disabled" id="menuExportImage"><span class="icon-svg"><svg><use href="#i-download"/></svg></span>画像書き出し</div>
         <div class="menu-sep"></div>
         <div class="menu-dropdown-item" id="menuMergePdf"><span class="icon-svg"><svg><use href="#i-merge"/></svg></span>PDF結合（追加）</div>
@@ -1001,6 +1012,7 @@
         <div class="menu-dropdown-item disabled" id="menuRunObi"><span class="icon-svg"><svg><use href="#i-zap"/></svg></span>帯チェン実行</div>
         <div class="menu-sep"></div>
         <div class="menu-dropdown-item" id="menuAddManualObi">帯を手動追加</div>
+        <div class="menu-dropdown-item" id="menuInsertObiImage">帯画像を挿入</div>
         <div class="menu-dropdown-item" id="menuAddWhiteBox">白ボックスを追加</div>
         <div class="menu-dropdown-item disabled" id="menuRemoveObi">帯/ボックスを削除</div>
         <div class="menu-sep"></div>
@@ -1018,6 +1030,8 @@
         <div class="menu-separator"></div>
         <div class="menu-dropdown-item" id="menuRotateCW"><span class="icon-svg"><svg><use href="#i-rotate-cw"/></svg></span>右に90°回転</div>
         <div class="menu-dropdown-item" id="menuRotateCCW"><span class="icon-svg"><svg><use href="#i-rotate-ccw"/></svg></span>左に90°回転</div>
+        <div class="menu-separator"></div>
+        <div class="menu-dropdown-item disabled" id="menuAutoOrient"><span class="icon-svg"><svg><use href="#i-compass"/></svg></span>図面の方向を揃える</div>
       </div>
     </div>
 
@@ -1058,10 +1072,81 @@
     </div>
   </div>
 
+  <!-- サブスク管理モーダル -->
+  <div id="subscriptionModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; justify-content:center; align-items:center;">
+    <div style="background:#fff; border-radius:12px; padding:36px 32px; width:400px; max-width:90vw; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <h2 style="margin:0 0 20px; font-size:18px; text-align:center; color:#333;">サブスクリプション管理</h2>
+
+      <!-- プラン状況 -->
+      <div style="background:#f8f8f8; border-radius:8px; padding:16px; margin-bottom:20px;">
+        <div style="font-size:12px; color:#888; margin-bottom:8px;">現在のプラン</div>
+        <div id="subModalPlan" style="font-size:16px; font-weight:600; color:#333;">-</div>
+        <div id="subModalStatus" style="font-size:13px; color:#666; margin-top:6px;">-</div>
+        <div id="subModalPeriod" style="font-size:12px; color:#999; margin-top:4px;"></div>
+      </div>
+
+      <!-- キャンペーンコード入力 -->
+      <div id="subPromoSection" style="margin-bottom:20px;">
+        <label style="display:block; font-size:13px; color:#555; margin-bottom:6px; font-weight:500;">キャンペーンコードを入力</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="subPromoInput" style="flex:1; padding:10px 12px; border:1px solid #ccc; border-radius:6px; font-size:14px; box-sizing:border-box;" placeholder="例: FRENDS">
+          <button id="subPromoApplyBtn" style="padding:10px 16px; background:#d8783e; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">適用</button>
+        </div>
+        <div id="subPromoResult" style="display:none; margin-top:8px; padding:8px 12px; border-radius:6px; font-size:12px;"></div>
+        <p style="font-size:11px; color:#999; margin:8px 0 0;">紹介コードを入力すると月額料金が割引されます</p>
+      </div>
+
+      <!-- 解約ボタン -->
+      <div id="subCancelSection" style="display:none; margin-bottom:16px; border-top:1px solid #eee; padding-top:16px;">
+        <button id="subCancelBtn" style="width:100%; padding:10px; background:#fff; color:#d32f2f; border:1px solid #d32f2f; border-radius:6px; font-size:13px; cursor:pointer;">サブスクリプションを解約</button>
+        <div id="subCancelConfirm" style="display:none; margin-top:8px;">
+          <p style="font-size:12px; color:#d32f2f; margin:0 0 8px;">本当に解約しますか？現在の期間終了後にご利用できなくなります。</p>
+          <div style="display:flex; gap:8px;">
+            <button id="subCancelYes" style="flex:1; padding:8px; background:#d32f2f; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">解約する</button>
+            <button id="subCancelNo" style="flex:1; padding:8px; background:#f0f0f0; color:#555; border:none; border-radius:6px; font-size:13px; cursor:pointer;">やめる</button>
+          </div>
+        </div>
+        <div id="subCancelResult" style="display:none; margin-top:8px; padding:8px 12px; border-radius:6px; font-size:12px;"></div>
+      </div>
+
+      <!-- 閉じるボタン -->
+      <!-- バージョン情報 -->
+      <div style="text-align:center; margin-bottom:12px; font-size:11px; color:#999;">
+        Obi-Tool <span id="subModalVersion">v-</span>
+      </div>
+
+      <button id="subModalCloseBtn" style="width:100%; padding:10px; background:#f0f0f0; color:#555; border:none; border-radius:6px; font-size:14px; cursor:pointer;">閉じる</button>
+    </div>
+  </div>
+
+  <!-- アップデート通知ポップアップ -->
+  <div id="updatePopup" style="display:none; position:fixed; top:32px; right:16px; width:300px; background:#fff; border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.15); z-index:9999; overflow:hidden;">
+    <div style="padding:16px;">
+      <div style="font-size:14px; font-weight:600; color:#333; margin-bottom:8px;" id="updatePopupTitle">アップデート情報</div>
+      <div id="updatePopupBody" style="font-size:12px; color:#666; line-height:1.5;">
+        最新バージョンです
+      </div>
+      <div id="updatePopupActions" style="display:none; margin-top:12px; display:flex; gap:8px;">
+        <button id="updateInstallBtn" style="flex:1; padding:8px; background:#d8783e; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;">再起動してアップデート</button>
+      </div>
+      <div id="updateProgressBar" style="display:none; margin-top:10px; height:4px; background:#eee; border-radius:2px; overflow:hidden;">
+        <div id="updateProgressFill" style="height:100%; background:#d8783e; width:0%; transition:width 0.3s;"></div>
+      </div>
+    </div>
+    <div style="text-align:right; padding:0 16px 12px;">
+      <a href="#" id="updatePopupClose" style="font-size:11px; color:#999;">閉じる</a>
+    </div>
+  </div>
+
   <!-- ライセンスステータスバー -->
   <div id="licenseBar" style="display:none; height:28px; background:#f0f0f0; border-bottom:1px solid #ddd; padding:0 16px; font-size:11px; color:#666; align-items:center; gap:12px; flex-shrink:0;">
     <span id="licenseStatus">-</span>
     <span style="flex:1;"></span>
+    <span id="referralCodeArea" style="display:none; font-size:11px; color:#888; margin-right:12px; cursor:pointer;" title="クリックでコピー">紹介コード: <strong style="color:#d8783e;">FRENDS</strong>（紹介された方は月額¥400引き）</span>
+    <span id="updateNotifyBtn" style="display:none; cursor:pointer; position:relative; margin-right:8px;" title="アップデート通知">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d8783e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span id="updateBadge" style="display:none; position:absolute; top:-4px; right:-4px; width:8px; height:8px; background:#d32f2f; border-radius:50%;"></span>
+    </span>
     <a href="#" id="licenseManageLink" style="font-size:11px; color:#d8783e;">サブスク管理</a>
     <a href="#" id="licenseLogoutLink" style="font-size:11px; color:#888; margin-left:8px;">ログアウト</a>
   </div>
@@ -1093,6 +1178,38 @@
       </button>
       <button class="toolbar-btn" id="toolMarker" title="マーカー（蛍光ペン）">
         <span class="icon-svg" style="width:15px;height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="14" height="6" rx="1" transform="rotate(-30 10 13)"/><line x1="18" y1="7" x2="21" y2="4"/></svg></span>マーカー
+      </button>
+      <button class="toolbar-btn" id="toolInsertImage" title="画像を挿入">
+        <span class="icon-svg"><svg><use href="#i-image"/></svg></span>画像
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <span class="toolbar-label">帯</span>
+      <button class="toolbar-btn disabled" id="toolManualObi" title="帯を手動追加">
+        <span class="icon-svg"><svg><use href="#i-layers"/></svg></span>帯追加
+      </button>
+      <button class="toolbar-btn disabled" id="toolInsertObiImage" title="帯画像を挿入">
+        <span class="icon-svg" style="width:15px;height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="15" x2="21" y2="15"/><circle cx="8.5" cy="8.5" r="1.5"/></svg></span>帯画像
+      </button>
+      <button class="toolbar-btn disabled" id="toolAddWhiteBox" title="白ボックスを追加">
+        <span class="icon-svg" style="width:15px;height:15px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"/></svg></span>白Box
+      </button>
+      <button class="toolbar-btn disabled" id="toolRunObi" title="帯チェン実行">
+        <span class="icon-svg"><svg><use href="#i-zap"/></svg></span>帯チェン
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <span class="toolbar-label">編集</span>
+      <button class="toolbar-btn disabled" id="toolRotateCW" title="右に90°回転">
+        <span class="icon-svg"><svg><use href="#i-rotate-cw"/></svg></span>右回転
+      </button>
+      <button class="toolbar-btn disabled" id="toolRotateCCW" title="左に90°回転">
+        <span class="icon-svg"><svg><use href="#i-rotate-ccw"/></svg></span>左回転
+      </button>
+      <button class="toolbar-btn disabled" id="toolDeleteObj" title="選択オブジェクトを削除 (Del)">
+        <span class="icon-svg"><svg><use href="#i-trash"/></svg></span>削除
       </button>
     </div>
     <div class="toolbar-sep"></div>
@@ -1168,6 +1285,10 @@
             <div class="white-box-handle" data-handle="tr"></div>
             <div class="white-box-handle" data-handle="bl"></div>
             <div class="white-box-handle" data-handle="br"></div>
+            <div class="white-box-handle" data-handle="tm"></div>
+            <div class="white-box-handle" data-handle="bm"></div>
+            <div class="white-box-handle" data-handle="ml"></div>
+            <div class="white-box-handle" data-handle="mr"></div>
           </div>
           <!-- 編集オブジェクトはここにJS動的追加 -->
         </div>
@@ -1182,6 +1303,7 @@
     <div class="context-menu-item" id="ctxInsertShape"><span class="icon-svg"><svg><use href="#i-square"/></svg></span>図形を挿入</div>
     <div class="context-menu-sep"></div>
     <div class="context-menu-item" id="ctxAddManualObi">帯を手動追加</div>
+    <div class="context-menu-item" id="ctxInsertObiImage">帯画像を挿入</div>
     <div class="context-menu-item" id="ctxAddWhiteBox">白ボックスを追加</div>
     <div class="context-menu-sep"></div>
     <div class="context-menu-item" id="ctxRotateCW"><span class="icon-svg"><svg><use href="#i-rotate-cw"/></svg></span>右に90°回転</div>
@@ -1290,6 +1412,16 @@
             <button class="btn btn-primary" id="stampCustomBtn" style="padding:6px 14px;font-size:12px;">挿入</button>
           </div>
         </div>
+
+        <!-- カスタム画像スタンプ -->
+        <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+          <label style="font-size:12px;color:var(--text-muted);">画像スタンプ:</label>
+          <div id="customStampGrid" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; min-height:40px;"></div>
+          <div style="margin-top:8px; display:flex; gap:6px;">
+            <button class="btn" id="stampImageUploadBtn" style="flex:1; padding:6px 10px; font-size:12px; border:1px dashed var(--border); background:var(--bg-sidebar); cursor:pointer;">+ 画像を追加</button>
+            <input type="file" id="stampImageFileInput" accept="image/*" style="display:none;" multiple>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1342,7 +1474,8 @@
       <div class="modal-body" style="max-height:60vh;">
         <div class="shortcut-section">ファイル操作</div>
         <div class="shortcut-grid">
-          <span class="key">Ctrl+S</span><span class="desc">PDF保存</span>
+          <span class="key">Ctrl+S</span><span class="desc">上書き保存</span>
+          <span class="key">Ctrl+Shift+S</span><span class="desc">名前を付けて保存</span>
           <span class="key">Ctrl+P</span><span class="desc">印刷</span>
           <span class="key">Ctrl+Z</span><span class="desc">元に戻す</span>
           <span class="key">Ctrl+Y</span><span class="desc">やり直し</span>
@@ -1400,12 +1533,13 @@
     let currentFilePath = '';
     let sidebarCollapsed = false;
 
-    const RENDER_SCALE = 2;
+    const RENDER_SCALE = 3;
     const THUMB_SCALE = 0.4;
 
     // ===== Zoom State =====
     let viewerZoom = 1.0;
-    const ZOOM_MIN = 0.25;
+    let fitZoomLevel = 1.0;  // ページがちょうど画面に収まるズーム率
+    const ZOOM_MIN = 0.1;
     const ZOOM_MAX = 4.0;
     const ZOOM_STEP = 0.1;
     let zoomIndicatorTimeout = null;
@@ -1420,6 +1554,7 @@
     const undoStack = [];
     const redoStack = [];
     const UNDO_MAX = 50;
+    let stateRestoreVersion = 0;
 
     function captureState() {
       // Lightweight snapshot of editable state
@@ -1427,6 +1562,8 @@
         pages: pdfPages.map(p => ({
           whiteBox: p.whiteBox ? {...p.whiteBox} : null,
           obiRect: p.obiRect ? {...p.obiRect} : null,
+          detected: !!p.detected,
+          region: p.region ? { ...p.region } : null,
           rotation: p.rotation || 0,
         })),
         editObjects: JSON.parse(JSON.stringify(editObjects)),
@@ -1434,8 +1571,8 @@
       };
     }
 
-    function pushUndo() {
-      undoStack.push(captureState());
+    function pushUndoState(state) {
+      undoStack.push(state);
       if (undoStack.length > UNDO_MAX) undoStack.shift();
       redoStack.length = 0;
       updateUndoRedoMenu();
@@ -1443,6 +1580,10 @@
       if (window.electronAPI && window.electronAPI.setDirty) {
         window.electronAPI.setDirty(true);
       }
+    }
+
+    function pushUndo() {
+      pushUndoState(captureState());
     }
 
     function performUndo() {
@@ -1463,11 +1604,36 @@
       showToast('やり直しました');
     }
 
+    async function rebuildProcessedCanvasForPage(pageIdx, restoreVersion) {
+      const pd = pdfPages[pageIdx];
+      if (!pd) return;
+      if (!pd.whiteBox && !pd.obiRect) {
+        pd.processedCanvas = null;
+        return;
+      }
+
+      const page = pd.page;
+      const viewport = page.getViewport({ scale: RENDER_SCALE, rotation: getPageRotation(pageIdx) });
+      const baseCanvas = document.createElement('canvas');
+      baseCanvas.width = viewport.width;
+      baseCanvas.height = viewport.height;
+      await page.render({ canvasContext: baseCanvas.getContext('2d'), viewport }).promise;
+      if (restoreVersion !== stateRestoreVersion) return;
+      bakeProcessedCanvas(pd, baseCanvas);
+    }
+
+    async function rebuildProcessedCanvasesFromState(restoreVersion) {
+      await Promise.all(pdfPages.map((_, pageIdx) => rebuildProcessedCanvasForPage(pageIdx, restoreVersion)));
+    }
+
     function restoreState(state) {
+      const restoreVersion = ++stateRestoreVersion;
       state.pages.forEach((sp, i) => {
         if (pdfPages[i]) {
           pdfPages[i].whiteBox = sp.whiteBox;
           pdfPages[i].obiRect = sp.obiRect;
+          pdfPages[i].detected = !!sp.detected;
+          pdfPages[i].region = sp.region ? { ...sp.region } : null;
           pdfPages[i].rotation = sp.rotation;
           pdfPages[i].processedCanvas = null; // force re-render
         }
@@ -1485,10 +1651,19 @@
       obiProcessed = pdfPages.some(p => p.whiteBox || p.obiRect);
       selectedEditObj = null;
       selectedOverlay = null;
-      renderCurrentPage();
-      generateThumbnails();
-      updatePageNav();
-      updateMenuStates();
+      rebuildProcessedCanvasesFromState(restoreVersion)
+        .catch((e) => {
+          if (restoreVersion !== stateRestoreVersion) return;
+          console.error('Restore state error:', e);
+          showToast('元に戻す処理で一部再描画に失敗しました');
+        })
+        .finally(() => {
+          if (restoreVersion !== stateRestoreVersion) return;
+          renderCurrentPage();
+          generateThumbnails();
+          updatePageNav();
+          updateMenuStates();
+        });
     }
 
     function updateUndoRedoMenu() {
@@ -1547,27 +1722,42 @@
     // 検出領域の高さが適正高さの MAX_OBI_HEIGHT_RATIO 倍を超えないよう制限する
     const MAX_OBI_HEIGHT_RATIO = 1.5;
 
-    function clampObiRect(whiteBox, pageWidthPct, pageHeightPct) {
+    function getActiveObiEntry() {
+      if (!obiImage) return null;
+      return obiImages.find(e => e.img === obiImage) || null;
+    }
+
+    function clampObiRect(whiteBox, pageWidthPx, pageHeightPx) {
       // obiImage がなければ whiteBox と同じ
       if (!obiImage || !obiImage.naturalWidth || !obiImage.naturalHeight) {
         return { ...whiteBox };
       }
-      const obiAR = obiImage.naturalWidth / obiImage.naturalHeight; // 帯画像の幅/高さ比
-      // whiteBox の幅をページ上のピクセル比で見て、帯画像のARから適正高さ(%)を算出
-      // pageWidthPct, pageHeightPct はページの実サイズ(px)
-      const wPx = whiteBox.wPct / 100 * pageWidthPct;
-      const idealHPx = wPx / obiAR;
-      const idealHPct = idealHPx / pageHeightPct * 100;
-      const maxHPct = idealHPct * MAX_OBI_HEIGHT_RATIO;
 
-      if (whiteBox.hPct <= maxHPct) {
-        // 制限不要 — whiteBox と同じ
+      const activeEntry = getActiveObiEntry();
+
+      // lockAspect が false（自由変形）なら whiteBox そのまま
+      if (activeEntry && activeEntry.lockAspect === false) {
         return { ...whiteBox };
       }
-      // 高さを制限し、下端を合わせる（帯は通常下端にあるため）
-      const clampedH = maxHPct;
-      const newY = whiteBox.yPct + (whiteBox.hPct - clampedH);
-      return { xPct: whiteBox.xPct, yPct: newY, wPct: whiteBox.wPct, hPct: clampedH };
+
+      // lockAspect が true（固定）→ whiteBoxの幅を基準にアスペクト比から高さを算出
+      // 青枠を超えてもOK（帯画像の縦横比を優先）
+      const obiAR = obiImage.naturalWidth / obiImage.naturalHeight;
+      const wPx = whiteBox.wPct / 100 * pageWidthPx;
+      const idealHPx = wPx / obiAR;
+      const idealHPct = idealHPx / pageHeightPx * 100;
+
+      // 下端を whiteBox の下端に合わせる（ただしページ外にはみ出さない）
+      const bottomPct = Math.min(100, whiteBox.yPct + whiteBox.hPct);
+      let newY = bottomPct - idealHPct;
+      // 上端がページ外（負の値）にならないようクランプ
+      if (newY < 0) {
+        newY = 0;
+        // 上端を0に固定した場合、高さもページ内に収まるよう調整
+        const clampedH = Math.min(idealHPct, 100);
+        return { xPct: whiteBox.xPct, yPct: 0, wPct: whiteBox.wPct, hPct: clampedH };
+      }
+      return { xPct: whiteBox.xPct, yPct: newY, wPct: whiteBox.wPct, hPct: Math.min(idealHPct, 100 - newY) };
     }
 
     // ===== Keywords & Detection Engine: loaded from detect-engine.js =====
@@ -1633,9 +1823,13 @@
       closeAllMenus();
       document.getElementById('pdfFileInput').click();
     });
+    document.getElementById('menuOverwriteSave').addEventListener('click', () => {
+      closeAllMenus();
+      generateAndSavePDF(true);
+    });
     document.getElementById('menuSavePdf').addEventListener('click', () => {
       closeAllMenus();
-      generateAndSavePDF();
+      generateAndSavePDF(false);
     });
     document.getElementById('menuPrint').addEventListener('click', () => {
       closeAllMenus();
@@ -1668,6 +1862,10 @@
     document.getElementById('menuAddManualObi').addEventListener('click', () => {
       closeAllMenus();
       addManualObi();
+    });
+    document.getElementById('menuInsertObiImage').addEventListener('click', () => {
+      closeAllMenus();
+      insertObiAsEditObject();
     });
     document.getElementById('menuAddWhiteBox').addEventListener('click', () => {
       closeAllMenus();
@@ -1705,6 +1903,168 @@
       closeAllMenus();
       if (pdfDoc) rotatePage(currentPage, -90);
     });
+    document.getElementById('menuAutoOrient').addEventListener('click', () => {
+      closeAllMenus();
+      if (pdfDoc) autoOrientPages();
+    });
+
+    // ===== 図面の方向を自動で揃える =====
+    async function detectPageOrientation(pageIdx) {
+      // テキストのtransform行列から向きを判定
+      // 戻り値: 0, 90, 180, 270 (正しい向きにするために必要な回転角度)
+      const pd = pdfPages[pageIdx];
+      if (!pd.page) return 0;
+
+      const tc = await pd.page.getTextContent();
+      const items = tc.items.filter(it => it.str && it.str.trim().length > 0);
+
+      if (items.length < 5) {
+        // テキストが少ない → 画像ベースPDFの可能性 → OSD判定
+        return await detectOrientationByOSD(pageIdx);
+      }
+
+      // transform行列: [a, b, c, d, e, f]
+      // 正位置(0°):   a>0, b≈0, c≈0, d>0  → atan2(b,a) ≈ 0
+      // 90°回転:      a≈0, b>0, c<0(?), d≈0 → atan2(b,a) ≈ 90
+      // 180°回転:     a<0, b≈0, c≈0, d<0  → atan2(b,a) ≈ 180
+      // 270°回転:     a≈0, b<0, c>0(?), d≈0 → atan2(b,a) ≈ 270
+      const votes = { 0: 0, 90: 0, 180: 0, 270: 0 };
+
+      for (const item of items) {
+        const t = item.transform;
+        if (!t || t.length < 4) continue;
+        const a = t[0], b = t[1];
+        // atan2でテキストの角度を取得
+        let angleDeg = Math.round(Math.atan2(b, a) * 180 / Math.PI);
+        if (angleDeg < 0) angleDeg += 360;
+        // 最も近い90度単位にスナップ
+        const snapped = Math.round(angleDeg / 90) * 90 % 360;
+        if (votes.hasOwnProperty(snapped)) {
+          // 文字列長で重み付け（長いテキストほど信頼度高い）
+          votes[snapped] += item.str.length;
+        }
+      }
+
+      // 最多得票の角度を検出
+      let dominant = 0;
+      let maxVote = 0;
+      for (const [angle, count] of Object.entries(votes)) {
+        if (count > maxVote) {
+          maxVote = count;
+          dominant = parseInt(angle);
+        }
+      }
+
+      // dominant が現在のテキストの向き → 正位置にするには逆回転
+      // テキストが0°なら回転不要、90°なら-90° (=270°)回転が必要
+      const correction = (360 - dominant) % 360;
+      return correction;
+    }
+
+    async function detectOrientationByOSD(pageIdx) {
+      // 画像ベースPDF: OCRで各回転のテキスト認識信頼度を比較
+      const pd = pdfPages[pageIdx];
+      if (!pd.page) return 0;
+
+      try {
+        if (!ocrReady && !ocrInitializing) await initOcrWorker();
+        if (!ocrReady || !ocrWorker) return 0;
+
+        // 低解像度でレンダリング（OSD判定には十分）
+        const baseVP = pd.page.getViewport({ scale: 1, rotation: getPageRotation(pageIdx) });
+        const scale = Math.min(1.5, 1200 / Math.max(baseVP.width, baseVP.height));
+
+        let bestRotation = 0;
+        let bestConfidence = -1;
+
+        // 0° と 180° を試行（横書きマイソクなら大半はこの2つ）
+        // 90° と 270° は 0°/180° の信頼度が低い場合のみ
+        const rotations = [0, 180];
+
+        for (const rot of rotations) {
+          const vp = pd.page.getViewport({ scale, rotation: ((pd.rotation || 0) + rot + 360) % 360 });
+          const tmpCanvas = document.createElement('canvas');
+          tmpCanvas.width = vp.width;
+          tmpCanvas.height = vp.height;
+          const tmpCtx = tmpCanvas.getContext('2d');
+          await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
+
+          const result = await ocrWorker.recognize(tmpCanvas);
+          const conf = result.data.confidence || 0;
+          console.log(`[autoOrient] ページ${pageIdx + 1} 回転${rot}°: 信頼度=${conf.toFixed(1)}`);
+
+          if (conf > bestConfidence) {
+            bestConfidence = conf;
+            bestRotation = rot;
+          }
+        }
+
+        // 0°/180°の信頼度が低い場合、90°/270°も試行
+        if (bestConfidence < 40) {
+          for (const rot of [90, 270]) {
+            const vp = pd.page.getViewport({ scale, rotation: ((pd.rotation || 0) + rot + 360) % 360 });
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = vp.width;
+            tmpCanvas.height = vp.height;
+            const tmpCtx = tmpCanvas.getContext('2d');
+            await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
+
+            const result = await ocrWorker.recognize(tmpCanvas);
+            const conf = result.data.confidence || 0;
+            console.log(`[autoOrient] ページ${pageIdx + 1} 回転${rot}°: 信頼度=${conf.toFixed(1)}`);
+
+            if (conf > bestConfidence) {
+              bestConfidence = conf;
+              bestRotation = rot;
+            }
+          }
+        }
+
+        return bestRotation;
+      } catch (e) {
+        console.warn(`[autoOrient] OSD検出失敗 ページ${pageIdx + 1}:`, e);
+      }
+      return 0;
+    }
+
+    async function autoOrientPages() {
+      if (!pdfDoc || totalPages === 0) return;
+      showLoading('図面の方向を解析中...');
+      pushUndo();
+
+      let correctedCount = 0;
+      try {
+        for (let i = 0; i < totalPages; i++) {
+          showLoading(`図面の方向を解析中... (${i + 1}/${totalPages})`);
+          const correction = await detectPageOrientation(i);
+          if (correction !== 0) {
+            const pd = pdfPages[i];
+            pd.rotation = ((pd.rotation || 0) + correction + 360) % 360;
+            // 帯チェン処理済みキャンバスを無効化
+            pd.processedCanvas = null;
+            pd.whiteBox = null;
+            pd.obiRect = null;
+            pd.detected = false;
+            pd.region = null;
+            correctedCount++;
+          }
+        }
+        obiProcessed = pdfPages.some(p => p.whiteBox || p.obiRect);
+        await renderCurrentPage();
+        generateThumbnails();
+        updateMenuStates();
+
+        if (correctedCount > 0) {
+          showToast(`${correctedCount}ページの方向を補正しました`);
+        } else {
+          showToast('すべてのページが正しい向きです');
+        }
+      } catch (e) {
+        console.error('[autoOrient] エラー:', e);
+        showToast('方向の解析中にエラーが発生しました');
+      }
+      hideLoading();
+    }
 
     // File input handlers
     document.getElementById('pdfFileInput').addEventListener('change', (e) => {
@@ -1733,18 +2093,28 @@
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goPrev(); }
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goNext(); }
+      if (e.key === 'Escape' && selectedThumbPages.size > 0) {
+        clearThumbSelection();
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (e.target.tagName === 'TEXTAREA') return;
         e.preventDefault();
-        if (selectedOverlay) {
+        // サムネイル複数選択中の削除
+        if (selectedThumbPages.size > 0) {
+          deletePages(getSelectedThumbsSorted());
+          clearThumbSelection();
+        } else if (selectedOverlay) {
           deleteSelectedOverlay();
         } else if (selectedEditObj) {
           deleteSelectedObject();
         }
       }
-      if (e.ctrlKey && e.key === 's') {
+      if (e.ctrlKey && e.shiftKey && e.key === 'S') {
         e.preventDefault();
-        generateAndSavePDF();
+        generateAndSavePDF(false);
+      } else if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        generateAndSavePDF(true);
       }
       // Ctrl+Z: 元に戻す
       if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
@@ -1797,6 +2167,10 @@
     });
 
     window.addEventListener('resize', () => {
+      // ウィンドウリサイズ時にフィットズームを再計算
+      if (pdfDoc && viewerZoom <= fitZoomLevel * 1.01) {
+        applyFitZoom();
+      }
       if (typeof updateWhiteBoxOverlayPosition === 'function') updateWhiteBoxOverlayPosition();
       if (typeof updateObiOverlayPosition === 'function') updateObiOverlayPosition();
       renderEditObjects();
@@ -1846,31 +2220,68 @@
     const PREVIEW_THRESHOLD = 0.45; // この倍率以下でプレビューモード
     let previewMode = false;
 
+    function calcFitZoom() {
+      // キャンバスのピクセルサイズに対し、ラッパーに収まるズーム率を算出
+      const wrapper = document.getElementById('pdfCanvasWrapper');
+      if (!wrapper || !canvas.width || !canvas.height) return 1.0;
+      const wW = wrapper.clientWidth - 24;  // padding分
+      const wH = wrapper.clientHeight - 24;
+      return Math.min(wW / canvas.width, wH / canvas.height, 1.0);
+    }
+
+    function updateContainerSize() {
+      // canvasContainer の CSS 幅を設定し、高さはcanvasのアスペクト比から正確に算出
+      // これによりズーム時にアスペクト比が崩れることを防止
+      const w = canvas.width * viewerZoom;
+      const h = canvas.height * viewerZoom;
+      canvasContainer.style.width = Math.round(w) + 'px';
+      canvasContainer.style.height = Math.round(h) + 'px';
+    }
+
+    function applyFitZoom() {
+      fitZoomLevel = calcFitZoom();
+      viewerZoom = fitZoomLevel;
+      canvasContainer.style.transform = '';
+      updateContainerSize();
+      // フィット状態ではスクロール不要
+      const wrapper = document.getElementById('pdfCanvasWrapper');
+      wrapper.classList.remove('zoomed-wrapper');
+      wrapper.scrollLeft = 0;
+      wrapper.scrollTop = 0;
+    }
+
     function applyZoom(newZoom, centerX, centerY) {
       const wrapper = document.getElementById('pdfCanvasWrapper');
       const oldZoom = viewerZoom;
-      viewerZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(newZoom * 100) / 100));
+      viewerZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(newZoom * 1000) / 1000));
 
-      // プレビューモード切り替え
-      if (viewerZoom <= PREVIEW_THRESHOLD && !previewMode && pdfDoc && totalPages > 1) {
+      // フィットレベルに近ければスナップ
+      if (Math.abs(viewerZoom - fitZoomLevel) < 0.005) {
+        viewerZoom = fitZoomLevel;
+      }
+
+      // プレビューモード切り替え（フィットズーム基準で判定）
+      const previewThresholdActual = fitZoomLevel * 0.45;
+      if (viewerZoom <= previewThresholdActual && !previewMode && pdfDoc && totalPages > 1) {
         enterPreviewMode();
-      } else if (viewerZoom > PREVIEW_THRESHOLD && previewMode) {
+      } else if (viewerZoom > previewThresholdActual && previewMode) {
         exitPreviewMode();
       }
 
       if (!previewMode) {
-        if (viewerZoom === 1.0) {
-          canvasContainer.style.transform = '';
-          canvasContainer.classList.remove('zoomed');
+        canvasContainer.style.transform = '';
+        updateContainerSize();
+
+        if (viewerZoom <= fitZoomLevel) {
+          // フィット以下 → スクロール不要
           wrapper.classList.remove('zoomed-wrapper');
         } else {
-          canvasContainer.style.transform = `scale(${viewerZoom})`;
-          canvasContainer.classList.add('zoomed');
+          // フィット超え → スクロール可能
           wrapper.classList.add('zoomed-wrapper');
         }
 
         // スクロール位置をズーム中心に合わせる
-        if (centerX !== undefined && centerY !== undefined) {
+        if (centerX !== undefined && centerY !== undefined && viewerZoom > fitZoomLevel) {
           const scrollLeft = wrapper.scrollLeft;
           const scrollTop = wrapper.scrollTop;
           const newScrollLeft = (scrollLeft + centerX) * (viewerZoom / oldZoom) - centerX;
@@ -1878,11 +2289,19 @@
           wrapper.scrollLeft = newScrollLeft;
           wrapper.scrollTop = newScrollTop;
         }
+
+        // ズーム後にオーバーレイ位置を再計算
+        requestAnimationFrame(() => {
+          updateObiOverlayPosition();
+          updateWhiteBoxOverlayPosition();
+          renderEditObjects();
+        });
       }
 
-      // ズームインジケーター表示
+      // ズームインジケーター表示（フィットを100%として表示）
       const indicator = document.getElementById('zoomIndicator');
-      indicator.textContent = previewMode ? '全ページ表示' : Math.round(viewerZoom * 100) + '%';
+      const displayPct = Math.round((viewerZoom / fitZoomLevel) * 100);
+      indicator.textContent = previewMode ? '全ページ表示' : displayPct + '%';
       indicator.classList.add('visible');
       if (zoomIndicatorTimeout) clearTimeout(zoomIndicatorTimeout);
       zoomIndicatorTimeout = setTimeout(() => {
@@ -1931,7 +2350,7 @@
         // クリックでそのページに移動してプレビュー終了
         item.addEventListener('click', () => {
           currentPage = i;
-          viewerZoom = 1.0;
+          viewerZoom = fitZoomLevel;
           exitPreviewMode();
           renderCurrentPage();
           updatePageNav();
@@ -1949,15 +2368,14 @@
       const overlay = document.getElementById('pagePreviewOverlay');
       overlay.classList.remove('active');
       canvasContainer.style.display = '';
-      canvasContainer.style.transform = viewerZoom === 1.0 ? '' : `scale(${viewerZoom})`;
-      if (viewerZoom === 1.0) {
-        canvasContainer.classList.remove('zoomed');
+      updateContainerSize();
+      if (viewerZoom <= fitZoomLevel) {
         document.getElementById('pdfCanvasWrapper').classList.remove('zoomed-wrapper');
       }
     }
 
     function resetZoom() {
-      applyZoom(1.0);
+      applyFitZoom();
       document.getElementById('pdfCanvasWrapper').scrollLeft = 0;
       document.getElementById('pdfCanvasWrapper').scrollTop = 0;
     }
@@ -1967,15 +2385,22 @@
     document.getElementById('pdfCanvasWrapper').addEventListener('wheel', (e) => {
       if (!pdfDoc) return;
 
-      // Ctrl+スクロール = ズーム
+      // Ctrl+スクロール = スムーズズーム
       if (e.ctrlKey) {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+        // deltaMode に応じて正規化し、マウスホイール/トラックパッド両対応
+        let dy = e.deltaY;
+        if (e.deltaMode === 1) dy *= 30;  // DOM_DELTA_LINE → px換算
+        // クランプ: 1回のイベントで最大±50pxに制限（マウスホイールの大きな値を抑制）
+        dy = Math.max(-50, Math.min(50, dy));
+        const sensitivity = 0.0015;
+        const factor = 1 - dy * sensitivity;  // ±7.5% 程度ずつ
+        const newZoom = viewerZoom * factor;
         const wrapper = document.getElementById('pdfCanvasWrapper');
         const rect = wrapper.getBoundingClientRect();
         const cx = e.clientX - rect.left;
         const cy = e.clientY - rect.top;
-        applyZoom(viewerZoom + delta, cx, cy);
+        applyZoom(newZoom, cx, cy);
         return;
       }
 
@@ -2010,6 +2435,17 @@
       cm.style.top = e.clientY + 'px';
       cm.classList.add('show');
 
+      // メニューが画面外にはみ出す場合は位置を補正
+      requestAnimationFrame(() => {
+        const rect = cm.getBoundingClientRect();
+        if (rect.bottom > window.innerHeight) {
+          cm.style.top = Math.max(4, window.innerHeight - rect.height - 4) + 'px';
+        }
+        if (rect.right > window.innerWidth) {
+          cm.style.left = Math.max(4, window.innerWidth - rect.width - 4) + 'px';
+        }
+      });
+
       // Update enabled states
       const hasObj = !!selectedEditObj || !!selectedOverlay;
       document.getElementById('ctxDeleteObj').classList.toggle('disabled', !hasObj);
@@ -2030,6 +2466,10 @@
     document.getElementById('ctxAddManualObi').addEventListener('click', () => {
       document.getElementById('contextMenu').classList.remove('show');
       addManualObi();
+    });
+    document.getElementById('ctxInsertObiImage').addEventListener('click', () => {
+      document.getElementById('contextMenu').classList.remove('show');
+      insertObiAsEditObject();
     });
     document.getElementById('ctxAddWhiteBox').addEventListener('click', () => {
       document.getElementById('contextMenu').classList.remove('show');
@@ -2272,7 +2712,7 @@
             const img = new Image();
             img.onload = () => {
               obiImage = img;
-              const entry = { id: Date.now(), name: result.name || 'default.png', img, dataURL: url };
+              const entry = { id: Date.now(), name: result.name || 'default.png', img, dataURL: url, lockAspect: true };
               obiImages.push(entry);
               updateObiStatus();
             };
@@ -2294,7 +2734,7 @@
               const img = new Image();
               img.onload = () => {
                 obiImage = img;
-                const entry = { id: Date.now(), name: result.name, img, dataURL: url };
+                const entry = { id: Date.now(), name: result.name, img, dataURL: url, lockAspect: true };
                 obiImages.push(entry);
                 updateObiStatus();
                 window.electronAPI.saveObiImage(result.data, result.name);
@@ -2325,20 +2765,27 @@
     function updateMenuStates() {
       const hasPdf = !!pdfDoc;
       const hasOverlays = pdfPages.some(p => p.whiteBox || p.obiRect);
-      document.getElementById('menuSavePdf').classList.toggle('disabled', !hasPdf || (!obiProcessed && !hasOverlays));
+      const hasEditObjs = Object.values(editObjects).some(arr => arr && arr.length > 0);
+      const canSave = hasPdf && (obiProcessed || hasOverlays || hasEditObjs);
+      document.getElementById('menuOverwriteSave').classList.toggle('disabled', !canSave);
+      document.getElementById('menuSavePdf').classList.toggle('disabled', !canSave);
       document.getElementById('menuPrint').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuExportImage').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuTogglePen').classList.toggle('disabled', !hasPdf);
       // ツールバーボタンの有効/無効
-      document.querySelectorAll('#toolbar .toolbar-btn:not(#toolSelect)').forEach(btn => {
+      document.querySelectorAll('#toolbar .toolbar-btn:not(#toolSelect):not(#toolDeleteObj)').forEach(btn => {
         btn.classList.toggle('disabled', !hasPdf);
       });
+      // 削除ボタンは選択中のオブジェクトがある場合のみ有効
+      const hasSelection = !!(selectedEditObj || selectedOverlay);
+      document.getElementById('toolDeleteObj').classList.toggle('disabled', !hasPdf || !hasSelection);
       updateUndoRedoMenu();
       document.getElementById('menuRunObi').classList.toggle('disabled', !hasPdf);
-      document.getElementById('menuDeleteObj').classList.toggle('disabled', !selectedEditObj && !selectedOverlay);
+      document.getElementById('menuDeleteObj').classList.toggle('disabled', !hasSelection);
       document.getElementById('menuAddManualObi').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuAddWhiteBox').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuRemoveObi').classList.toggle('disabled', !hasPdf || (!pdfPages[currentPage]?.whiteBox && !pdfPages[currentPage]?.obiRect));
+      document.getElementById('menuAutoOrient').classList.toggle('disabled', !hasPdf);
     }
 
     // ===== PDF Loading =====
@@ -2402,7 +2849,7 @@
       editObjects = {};
       selectedEditObj = null;
       // ズームリセット
-      if (viewerZoom !== 1.0) resetZoom();
+      resetZoom();
 
       for (let i = 0; i < totalPages; i++) {
         const page = await pdf.getPage(i + 1);
@@ -2518,7 +2965,36 @@
         const item = document.createElement('div');
         item.className = 'thumb-item' + (i === currentPage ? ' active' : '');
         item.dataset.page = i;
-        item.addEventListener('click', () => goToPage(parseInt(item.dataset.page)));
+        item.addEventListener('click', (e) => {
+          const idx = parseInt(item.dataset.page);
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+クリック: 個別選択トグル
+            // 初回Ctrl+クリック時は現在表示中のページも選択に含める
+            if (selectedThumbPages.size === 0) {
+              selectedThumbPages.add(currentPage);
+            }
+            if (selectedThumbPages.has(idx)) {
+              selectedThumbPages.delete(idx);
+            } else {
+              selectedThumbPages.add(idx);
+            }
+            lastClickedThumb = idx;
+            updateThumbSelectionUI();
+          } else if (e.shiftKey && lastClickedThumb >= 0) {
+            // Shift+クリック: 範囲選択
+            const from = Math.min(lastClickedThumb, idx);
+            const to = Math.max(lastClickedThumb, idx);
+            for (let si = from; si <= to; si++) {
+              selectedThumbPages.add(si);
+            }
+            updateThumbSelectionUI();
+          } else {
+            // 通常クリック: 選択クリアしてページ移動
+            clearThumbSelection();
+            lastClickedThumb = idx;
+            goToPage(idx);
+          }
+        });
         setupThumbDrag(item, i);
 
         const label = document.createElement('div');
@@ -2533,6 +3009,8 @@
       // Apply column layout
       const sw = sidebar.offsetWidth;
       if (sw > 0) updateThumbColumns(sw);
+      // 複数選択状態を再適用
+      updateThumbSelectionUI();
     }
 
     function regenerateThumbnails() { generateThumbnails(); }
@@ -2555,6 +3033,26 @@
       tctx.drawImage(pd.processedCanvas, 0, 0, pd.processedCanvas.width, pd.processedCanvas.height, 0, 0, tc.width, tc.height);
     }
 
+    // ===== サムネイル複数選択 =====
+    let selectedThumbPages = new Set();
+    let lastClickedThumb = -1;
+
+    function clearThumbSelection() {
+      selectedThumbPages.clear();
+      updateThumbSelectionUI();
+    }
+
+    function updateThumbSelectionUI() {
+      document.querySelectorAll('#thumbList .thumb-item').forEach(el => {
+        const idx = parseInt(el.dataset.page);
+        el.classList.toggle('multi-selected', selectedThumbPages.has(idx));
+      });
+    }
+
+    function getSelectedThumbsSorted() {
+      return [...selectedThumbPages].sort((a, b) => a - b);
+    }
+
     // ===== サムネイル右クリックメニュー =====
     let thumbCtxPageIdx = -1;
 
@@ -2566,29 +3064,80 @@
       e.stopPropagation();
       thumbCtxPageIdx = parseInt(thumbItem.dataset.page);
 
+      // 右クリックしたページが選択に含まれていなければ、そのページだけを対象にする
+      if (!selectedThumbPages.has(thumbCtxPageIdx)) {
+        clearThumbSelection();
+      }
+
+      const isMulti = selectedThumbPages.size > 1;
+      const count = isMulti ? selectedThumbPages.size : 1;
+      const sorted = isMulti ? getSelectedThumbsSorted() : [thumbCtxPageIdx];
+
       const cm = document.getElementById('thumbContextMenu');
-      // メニュー位置
       cm.style.left = e.clientX + 'px';
       cm.style.top = e.clientY + 'px';
       cm.classList.add('show');
 
+      // メニューが画面外にはみ出す場合は位置を補正
+      requestAnimationFrame(() => {
+        const rect = cm.getBoundingClientRect();
+        if (rect.bottom > window.innerHeight) {
+          cm.style.top = Math.max(4, window.innerHeight - rect.height - 4) + 'px';
+        }
+        if (rect.right > window.innerWidth) {
+          cm.style.left = Math.max(4, window.innerWidth - rect.width - 4) + 'px';
+        }
+      });
+
+      // メニューテキストを動的に更新
+      const setText = (id, single, multi) => {
+        const el = document.getElementById(id);
+        const svg = el.querySelector('.icon-svg');
+        el.textContent = '';
+        if (svg) el.appendChild(svg);
+        el.appendChild(document.createTextNode(isMulti ? multi : single));
+      };
+      setText('thumbCtxGoTo', 'このページを表示', `${count}ページの先頭を表示`);
+      setText('thumbCtxDuplicate', 'ページを複製', `${count}ページを複製`);
+      setText('thumbCtxRotateCW', '右に90°回転', `${count}ページを右に90°回転`);
+      setText('thumbCtxRotateCCW', '左に90°回転', `${count}ページを左に90°回転`);
+      setText('thumbCtxRotate180', '180°回転', `${count}ページを180°回転`);
+      setText('thumbCtxRunObi', 'このページの帯チェン', `${count}ページの帯チェン`);
+      setText('thumbCtxDelete', 'ページを削除', `${count}ページを削除`);
+      setText('thumbCtxMoveUp', '前へ移動', `${count}ページを前へ移動`);
+      setText('thumbCtxMoveDown', '後へ移動', `${count}ページを後へ移動`);
+
       // 状態に応じてdisable
-      document.getElementById('thumbCtxMoveUp').classList.toggle('disabled', thumbCtxPageIdx <= 0);
-      document.getElementById('thumbCtxMoveDown').classList.toggle('disabled', thumbCtxPageIdx >= totalPages - 1);
-      document.getElementById('thumbCtxDelete').classList.toggle('disabled', totalPages <= 1);
+      document.getElementById('thumbCtxMoveUp').classList.toggle('disabled', sorted[0] <= 0);
+      document.getElementById('thumbCtxMoveDown').classList.toggle('disabled', sorted[sorted.length - 1] >= totalPages - 1);
+      document.getElementById('thumbCtxDelete').classList.toggle('disabled', totalPages <= count);
+      // 複数選択時は「前に空白挿入」は無効
+      document.getElementById('thumbCtxInsertBefore').classList.toggle('disabled', isMulti);
 
       // 他のメニューを閉じる
       document.getElementById('contextMenu').classList.remove('show');
     });
 
+    // ヘルパー: 操作対象ページインデックスのリストを取得
+    function getThumbCtxTargets() {
+      if (selectedThumbPages.size > 1) return getSelectedThumbsSorted();
+      return [thumbCtxPageIdx];
+    }
+
     document.getElementById('thumbCtxGoTo').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      if (thumbCtxPageIdx >= 0 && thumbCtxPageIdx < totalPages) goToPage(thumbCtxPageIdx);
+      const targets = getThumbCtxTargets();
+      if (targets[0] >= 0 && targets[0] < totalPages) goToPage(targets[0]);
     });
 
     document.getElementById('thumbCtxDuplicate').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      duplicatePage(thumbCtxPageIdx);
+      const targets = getThumbCtxTargets();
+      // 後ろから複製して挿入位置がずれないようにする
+      for (let i = targets.length - 1; i >= 0; i--) {
+        duplicatePage(targets[i]);
+      }
+      clearThumbSelection();
     });
 
     document.getElementById('thumbCtxInsertBefore').addEventListener('click', () => {
@@ -2598,35 +3147,45 @@
 
     document.getElementById('thumbCtxMoveUp').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      movePageUp(thumbCtxPageIdx);
+      const targets = getThumbCtxTargets();
+      if (targets[0] <= 0) return;
+      movePagesUp(targets);
     });
 
     document.getElementById('thumbCtxMoveDown').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      movePageDown(thumbCtxPageIdx);
+      const targets = getThumbCtxTargets();
+      if (targets[targets.length - 1] >= totalPages - 1) return;
+      movePagesDown(targets);
     });
 
     document.getElementById('thumbCtxRunObi').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      if (thumbCtxPageIdx >= 0) runObiForPage(thumbCtxPageIdx);
+      const targets = getThumbCtxTargets();
+      runObiForPages(targets);
     });
 
     document.getElementById('thumbCtxDelete').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      deletePage(thumbCtxPageIdx);
+      const targets = getThumbCtxTargets();
+      deletePages(targets);
+      clearThumbSelection();
     });
 
     document.getElementById('thumbCtxRotateCW').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      rotatePage(thumbCtxPageIdx, 90);
+      const targets = getThumbCtxTargets();
+      rotatePages(targets, 90);
     });
     document.getElementById('thumbCtxRotateCCW').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      rotatePage(thumbCtxPageIdx, -90);
+      const targets = getThumbCtxTargets();
+      rotatePages(targets, -90);
     });
     document.getElementById('thumbCtxRotate180').addEventListener('click', () => {
       document.getElementById('thumbContextMenu').classList.remove('show');
-      rotatePage(thumbCtxPageIdx, 180);
+      const targets = getThumbCtxTargets();
+      rotatePages(targets, 180);
     });
 
     // ===== ページ操作関数 =====
@@ -2811,13 +3370,12 @@
         pd.region = region;
 
         if (region.detected) {
-          // 白ボックスとOBIをセット
-          pd.whiteBox = {
-            xPct: region.x / tmpCanvas.width * 100,
-            yPct: region.y / tmpCanvas.height * 100,
-            wPct: region.w / tmpCanvas.width * 100,
-            hPct: region.h / tmpCanvas.height * 100,
-          };
+          // 白ボックスとOBIをセット（ページ範囲内にクランプ）
+          const xP = Math.max(0, Math.min(100, region.x / tmpCanvas.width * 100));
+          const yP = Math.max(0, Math.min(100, region.y / tmpCanvas.height * 100));
+          const wP = Math.min(100 - xP, region.w / tmpCanvas.width * 100);
+          const hP = Math.min(100 - yP, region.h / tmpCanvas.height * 100);
+          pd.whiteBox = { xPct: xP, yPct: yP, wPct: wP, hPct: hP };
           if (obiImage) {
             pd.obiRect = clampObiRect(pd.whiteBox, tmpCanvas.width, tmpCanvas.height);
           }
@@ -2836,6 +3394,160 @@
       hideLoading();
     }
 
+    // ===== バッチ操作（複数ページ一括） =====
+    function deletePages(indices) {
+      if (!pdfDoc || indices.length === 0) return;
+      if (totalPages <= indices.length) { showToast('全ページは削除できません'); return; }
+      pushUndo();
+      const idxSet = new Set(indices);
+      // editObjectsを再番号付け（削除前に構築）
+      const newEditObjects = {};
+      let newIdx = 0;
+      for (let i = 0; i < totalPages; i++) {
+        if (!idxSet.has(i)) {
+          if (editObjects[i]) newEditObjects[newIdx] = editObjects[i];
+          newIdx++;
+        }
+      }
+      editObjects = newEditObjects;
+      // 後ろから削除してインデックスがずれないようにする
+      const sorted = [...indices].sort((a, b) => b - a);
+      for (const idx of sorted) {
+        if (idx < 0 || idx >= pdfPages.length) continue;
+        pdfPages.splice(idx, 1);
+      }
+      totalPages = pdfPages.length;
+      if (currentPage >= totalPages) currentPage = totalPages - 1;
+      if (currentPage < 0) currentPage = 0;
+      totalPagesSpan.textContent = totalPages;
+      obiProcessed = pdfPages.some(p => p.whiteBox || p.obiRect);
+      renderCurrentPage();
+      generateThumbnails();
+      updatePageNav();
+      updateMenuStates();
+      showToast(`${indices.length}ページを削除しました`);
+    }
+
+    function rotatePages(indices, delta) {
+      if (!pdfDoc || indices.length === 0) return;
+      pushUndo();
+      for (const idx of indices) {
+        if (idx < 0 || idx >= totalPages) continue;
+        const pd = pdfPages[idx];
+        pd.rotation = ((pd.rotation || 0) + delta + 360) % 360;
+        pd.processedCanvas = null;
+        pd.whiteBox = null;
+        pd.obiRect = null;
+        pd.detected = false;
+        pd.region = null;
+      }
+      obiProcessed = pdfPages.some(p => p.whiteBox || p.obiRect);
+      if (indices.includes(currentPage)) renderCurrentPage();
+      generateThumbnails();
+      showToast(`${indices.length}ページを${delta > 0 ? '右' : '左'}に${Math.abs(delta)}°回転`);
+    }
+
+    function movePagesUp(indices) {
+      if (!pdfDoc || indices.length === 0) return;
+      const sorted = [...indices].sort((a, b) => a - b);
+      if (sorted[0] <= 0) return;
+      pushUndo();
+      // 上から順に1つずつ上へ移動
+      for (const idx of sorted) {
+        [pdfPages[idx - 1], pdfPages[idx]] = [pdfPages[idx], pdfPages[idx - 1]];
+        const a = editObjects[idx - 1];
+        const b = editObjects[idx];
+        delete editObjects[idx - 1];
+        delete editObjects[idx];
+        if (b) editObjects[idx - 1] = b;
+        if (a) editObjects[idx] = a;
+      }
+      // currentPage追従
+      if (indices.includes(currentPage)) currentPage = Math.max(0, currentPage - 1);
+      else if (currentPage === sorted[0] - 1) currentPage = sorted[sorted.length - 1];
+      // 選択状態も更新
+      selectedThumbPages.clear();
+      for (const idx of sorted) selectedThumbPages.add(idx - 1);
+      renderCurrentPage();
+      generateThumbnails();
+      updateThumbSelectionUI();
+      showToast(`${indices.length}ページを前へ移動`);
+    }
+
+    function movePagesDown(indices) {
+      if (!pdfDoc || indices.length === 0) return;
+      const sorted = [...indices].sort((a, b) => b - a); // 後ろから
+      if (sorted[0] >= totalPages - 1) return;
+      pushUndo();
+      for (const idx of sorted) {
+        [pdfPages[idx], pdfPages[idx + 1]] = [pdfPages[idx + 1], pdfPages[idx]];
+        const a = editObjects[idx];
+        const b = editObjects[idx + 1];
+        delete editObjects[idx];
+        delete editObjects[idx + 1];
+        if (b) editObjects[idx] = b;
+        if (a) editObjects[idx + 1] = a;
+      }
+      if (indices.includes(currentPage)) currentPage = Math.min(totalPages - 1, currentPage + 1);
+      else if (currentPage === sorted[sorted.length - 1] + 1) currentPage = sorted[0]; // corrected
+      selectedThumbPages.clear();
+      const sortedAsc = [...indices].sort((a, b) => a - b);
+      for (const idx of sortedAsc) selectedThumbPages.add(idx + 1);
+      renderCurrentPage();
+      generateThumbnails();
+      updateThumbSelectionUI();
+      showToast(`${indices.length}ページを後へ移動`);
+    }
+
+    async function runObiForPages(indices) {
+      if (!pdfDoc || indices.length === 0) return;
+      if (indices.length === 1) {
+        runObiForPage(indices[0]);
+        return;
+      }
+      showLoading('帯チェン処理中...');
+      let detected = 0;
+      try {
+        for (let i = 0; i < indices.length; i++) {
+          const pageIdx = indices[i];
+          document.getElementById('loadingSublabel').textContent = `${i + 1}/${indices.length} ページ処理中...`;
+          if (pageIdx < 0 || pageIdx >= totalPages) continue;
+          const pd = pdfPages[pageIdx];
+          if (!pd.page) continue;
+          const vp = pd.page.getViewport({ scale: RENDER_SCALE, rotation: getPageRotation(pageIdx) });
+          const tmpCanvas = document.createElement('canvas');
+          tmpCanvas.width = vp.width;
+          tmpCanvas.height = vp.height;
+          const tmpCtx = tmpCanvas.getContext('2d');
+          await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
+          const region = detectObiRegion(tmpCtx, tmpCanvas.width, tmpCanvas.height);
+          pd.detected = region.detected;
+          pd.region = region;
+          if (region.detected) {
+            const rxP = Math.max(0, Math.min(100, region.x / tmpCanvas.width * 100));
+            const ryP = Math.max(0, Math.min(100, region.y / tmpCanvas.height * 100));
+            const rwP = Math.min(100 - rxP, region.w / tmpCanvas.width * 100);
+            const rhP = Math.min(100 - ryP, region.h / tmpCanvas.height * 100);
+            pd.whiteBox = { xPct: rxP, yPct: ryP, wPct: rwP, hPct: rhP };
+            if (obiImage) {
+              pd.obiRect = clampObiRect(pd.whiteBox, tmpCanvas.width, tmpCanvas.height);
+            }
+            obiProcessed = true;
+            bakeProcessedCanvas(pd, tmpCanvas);
+            updateThumbnailForPage(pageIdx);
+            detected++;
+          }
+        }
+        if (indices.includes(currentPage)) renderCurrentPage();
+        updateMenuStates();
+        showToast(`${indices.length}ページ中${detected}ページで帯を検出`);
+      } catch(e) {
+        console.error('runObiForPages error:', e);
+        showToast('帯チェン処理でエラーが発生しました');
+      }
+      hideLoading();
+    }
+
     // ===== Load obi image from path =====
     async function loadObiImageFromPath(filePath) {
       try {
@@ -2846,7 +3558,7 @@
           const img = new Image();
           img.onload = () => {
             obiImage = img;
-            const entry = { id: Date.now(), name: result.name, img, dataURL: url };
+            const entry = { id: Date.now(), name: result.name, img, dataURL: url, lockAspect: true };
             obiImages.push(entry);
             updateObiStatus();
             window.electronAPI.saveObiImage(result.data, result.name);
@@ -2868,6 +3580,7 @@
         ctx.drawImage(pd.processedCanvas, 0, 0);
         // 帯チェン後はテキストレイヤーを非表示（帯部分のテキストは無意味）
         clearTextLayer();
+        applyFitZoom();
         requestAnimationFrame(() => { updateWhiteBoxOverlayPosition(); updateObiOverlayPosition(); renderEditObjects(); });
         return;
       }
@@ -2881,6 +3594,7 @@
       // テキストレイヤーを描画
       await renderTextLayer(page, viewport);
 
+      applyFitZoom();
       obiOverlay.style.display = 'none';
       document.getElementById('whiteBoxOverlay').style.display = 'none';
       renderEditObjects();
@@ -2965,6 +3679,7 @@
       if (!pdfDoc) { showToast('PDFを読み込んでください'); return; }
       if (!obiImage) { showToast('帯画像が未登録です。メニュー→帯チェン→帯画像を管理で登録してください。'); return; }
 
+      const prevState = captureState();
       showLoading('帯チェン処理中...', `全${totalPages}ページを解析しています`);
       try {
         for (let i = 0; i < pdfPages.length; i++) {
@@ -2981,11 +3696,11 @@
           pd.detected = true;
 
           if (region.detected) {
-            const topPct = region.clearTopPct;
-            const botPct = region.clearBottomPct;
-            const leftPct = region.clearLeftPct || 0;
-            const rightPct = region.clearRightPct || 100;
-            // Set white box and obi rect from detected region
+            const topPct = Math.max(0, Math.min(100, region.clearTopPct));
+            const botPct = Math.max(0, Math.min(100, region.clearBottomPct));
+            const leftPct = Math.max(0, Math.min(100, region.clearLeftPct || 0));
+            const rightPct = Math.max(0, Math.min(100, region.clearRightPct || 100));
+            // Set white box and obi rect from detected region (ページ範囲内にクランプ)
             pd.whiteBox = { xPct: leftPct, yPct: topPct, wPct: rightPct - leftPct, hPct: botPct - topPct };
             pd.obiRect = clampObiRect(pd.whiteBox, tc.width, tc.height);
           }
@@ -2994,6 +3709,7 @@
           bakeProcessedCanvas(pd, tc);
         }
         obiProcessed = true;
+        pushUndoState(prevState);
         await renderCurrentPage();
         updatePageNav();
         updateMenuStates();
@@ -3014,32 +3730,40 @@
       const tctx = baseCanvas.getContext('2d');
       const vw = baseCanvas.width, vh = baseCanvas.height;
 
+      // ページ範囲にクランプするヘルパー
+      function clampRect(pct) {
+        let x = Math.max(0, pct.xPct);
+        let y = Math.max(0, pct.yPct);
+        let w = Math.min(100 - x, pct.wPct);
+        let h = Math.min(100 - y, pct.hPct);
+        if (w < 0) w = 0;
+        if (h < 0) h = 0;
+        return {
+          x: Math.round(vw * x / 100),
+          y: Math.round(vh * y / 100),
+          w: Math.round(vw * w / 100),
+          h: Math.round(vh * h / 100),
+        };
+      }
+
       // Draw white box
       if (pd.whiteBox) {
-        const wb = pd.whiteBox;
-        const x = Math.round(vw * wb.xPct / 100);
-        const y = Math.round(vh * wb.yPct / 100);
-        const w = Math.round(vw * wb.wPct / 100);
-        const h = Math.round(vh * wb.hPct / 100);
+        const r = clampRect(pd.whiteBox);
         tctx.fillStyle = '#ffffff';
-        tctx.fillRect(x, y, w, h);
+        tctx.fillRect(r.x, r.y, r.w, r.h);
       }
 
       // Draw obi image
       if (pd.obiRect && obiImage) {
-        const ob = pd.obiRect;
-        const x = Math.round(vw * ob.xPct / 100);
-        const y = Math.round(vh * ob.yPct / 100);
-        const w = Math.round(vw * ob.wPct / 100);
-        const h = Math.round(vh * ob.hPct / 100);
-        tctx.drawImage(obiImage, x, y, w, h);
+        const r = clampRect(pd.obiRect);
+        tctx.drawImage(obiImage, r.x, r.y, r.w, r.h);
       }
 
       pd.processedCanvas = baseCanvas;
     }
 
     // ===== PDF Save =====
-    async function generateAndSavePDF() {
+    async function generateAndSavePDF(overwrite) {
       if (!pdfDoc) { showToast('PDFを読み込んでください'); return; }
       showLoading('PDFを生成中...');
       try {
@@ -3099,6 +3823,26 @@
                 lines.forEach((line, li) => {
                   sCtx.fillText(line, ox + 4, oy + li * lineH + 2);
                 });
+              } else if (obj.type === 'stamp') {
+                sCtx.save();
+                const sbgO = obj.bgOpacity ?? 1.0;
+                if (sbgO > 0) {
+                  sCtx.globalAlpha = sbgO;
+                  sCtx.fillStyle = obj.bgColor || '#ffffff';
+                  sCtx.fillRect(ox, oy, ow, oh);
+                  sCtx.globalAlpha = 1.0;
+                }
+                if (obj.stampBorder !== false) {
+                  sCtx.strokeStyle = obj.color || '#d32f2f';
+                  sCtx.lineWidth = Math.max(2, oh * 0.06);
+                  sCtx.strokeRect(ox + 4, oy + 4, ow - 8, oh - 8);
+                }
+                sCtx.fillStyle = obj.color || '#d32f2f';
+                const sfs = Math.min(oh * 0.55, ow * 0.3);
+                sCtx.font = 'bold ' + sfs + 'px "Noto Sans JP", sans-serif';
+                sCtx.textAlign = 'center'; sCtx.textBaseline = 'middle';
+                sCtx.fillText(obj.text || '', ox + ow/2, oy + oh/2);
+                sCtx.restore();
               } else if (obj.type === 'freehand' && obj.pathData) {
                 sCtx.save();
                 sCtx.strokeStyle = obj.color || '#ff0000';
@@ -3106,8 +3850,8 @@
                 sCtx.lineCap = 'round'; sCtx.lineJoin = 'round';
                 sCtx.beginPath();
                 const pts = obj.pathData;
-                if (pts.length > 0) { sCtx.moveTo(pts[0].x * sourceCanvas.width / 100, pts[0].y * sourceCanvas.height / 100); }
-                for (let k = 1; k < pts.length; k++) { sCtx.lineTo(pts[k].x * sourceCanvas.width / 100, pts[k].y * sourceCanvas.height / 100); }
+                if (pts.length > 0) { sCtx.moveTo((obj.xPct + pts[0].x * obj.wPct / 100) * sourceCanvas.width / 100, (obj.yPct + pts[0].y * obj.hPct / 100) * sourceCanvas.height / 100); }
+                for (let k = 1; k < pts.length; k++) { sCtx.lineTo((obj.xPct + pts[k].x * obj.wPct / 100) * sourceCanvas.width / 100, (obj.yPct + pts[k].y * obj.hPct / 100) * sourceCanvas.height / 100); }
                 sCtx.stroke();
                 sCtx.restore();
               } else if (obj.type === 'marker' && obj.pathData) {
@@ -3118,39 +3862,51 @@
                 sCtx.lineCap = 'round'; sCtx.lineJoin = 'round';
                 sCtx.beginPath();
                 const pts = obj.pathData;
-                if (pts.length > 0) { sCtx.moveTo(pts[0].x * sourceCanvas.width / 100, pts[0].y * sourceCanvas.height / 100); }
-                for (let k = 1; k < pts.length; k++) { sCtx.lineTo(pts[k].x * sourceCanvas.width / 100, pts[k].y * sourceCanvas.height / 100); }
+                if (pts.length > 0) { sCtx.moveTo((obj.xPct + pts[0].x * obj.wPct / 100) * sourceCanvas.width / 100, (obj.yPct + pts[0].y * obj.hPct / 100) * sourceCanvas.height / 100); }
+                for (let k = 1; k < pts.length; k++) { sCtx.lineTo((obj.xPct + pts[k].x * obj.wPct / 100) * sourceCanvas.width / 100, (obj.yPct + pts[k].y * obj.hPct / 100) * sourceCanvas.height / 100); }
                 sCtx.stroke();
                 sCtx.restore();
               }
             }
           }
 
-          const imgData = sourceCanvas.toDataURL('image/jpeg', 0.92);
+          const imgData = sourceCanvas.toDataURL('image/jpeg', 0.98);
           const pVP = pd.page.getViewport({ scale: 1, rotation: getPageRotation(i) });
           const pw = pVP.width * mmPerPt, ph = pVP.height * mmPerPt;
           if (i > 0) pdf.addPage([pw, ph], pw > ph ? 'landscape' : 'portrait');
           pdf.addImage(imgData, 'JPEG', 0, 0, pw, ph);
         }
 
-        let defaultName = 'output.pdf';
-        if (currentFilePath) {
-          const bn = currentFilePath.split(/[\\/]/).pop().replace(/\.pdf$/i, '');
-          defaultName = obiProcessed ? `${bn}_帯チェン済.pdf` : `${bn}_edited.pdf`;
-        }
+        const pdfData = pdf.output('arraybuffer');
 
-        if (window.electronAPI && window.electronAPI.saveFileDialog) {
-          const path = await window.electronAPI.saveFileDialog(defaultName);
-          if (path) {
-            const pdfData = pdf.output('arraybuffer');
-            await window.electronAPI.saveFile(path, pdfData);
-            showToast('PDFを保存しました');
-            if (window.electronAPI.setDirty) window.electronAPI.setDirty(false);
-          }
+        // 上書き保存: currentFilePathがあればダイアログなしで直接保存
+        if (overwrite && currentFilePath && window.electronAPI && window.electronAPI.saveFile) {
+          await window.electronAPI.saveFile(currentFilePath, pdfData);
+          showToast('上書き保存しました');
+          if (window.electronAPI.setDirty) window.electronAPI.setDirty(false);
         } else {
-          pdf.save(defaultName);
-          showToast('PDFを保存しました');
-          if (window.electronAPI && window.electronAPI.setDirty) window.electronAPI.setDirty(false);
+          // 名前を付けて保存（またはcurrentFilePathがない場合のフォールバック）
+          let defaultName = 'output_obi.pdf';
+          if (currentFilePath) {
+            const bn = currentFilePath.split(/[\\/]/).pop().replace(/\.pdf$/i, '');
+            defaultName = `${bn}_obi.pdf`;
+          } else if (fileNameEl.textContent && fileNameEl.textContent !== 'ファイルを開いてください') {
+            const bn = fileNameEl.textContent.replace(/\.pdf$/i, '');
+            defaultName = `${bn}_obi.pdf`;
+          }
+
+          if (window.electronAPI && window.electronAPI.saveFileDialog) {
+            const savePath = await window.electronAPI.saveFileDialog(defaultName);
+            if (savePath) {
+              await window.electronAPI.saveFile(savePath, pdfData);
+              showToast('PDFを保存しました');
+              if (window.electronAPI.setDirty) window.electronAPI.setDirty(false);
+            }
+          } else {
+            pdf.save(defaultName);
+            showToast('PDFを保存しました');
+            if (window.electronAPI && window.electronAPI.setDirty) window.electronAPI.setDirty(false);
+          }
         }
       } catch(e) {
         console.error('PDF save error:', e);
@@ -3290,8 +4046,8 @@
                 tctx.lineCap = 'round'; tctx.lineJoin = 'round';
                 tctx.beginPath();
                 const pts = obj.pathData;
-                if (pts.length > 0) { tctx.moveTo(pts[0].x * tc.width / 100, pts[0].y * tc.height / 100); }
-                for (let k = 1; k < pts.length; k++) { tctx.lineTo(pts[k].x * tc.width / 100, pts[k].y * tc.height / 100); }
+                if (pts.length > 0) { tctx.moveTo((obj.xPct + pts[0].x * obj.wPct / 100) * tc.width / 100, (obj.yPct + pts[0].y * obj.hPct / 100) * tc.height / 100); }
+                for (let k = 1; k < pts.length; k++) { tctx.lineTo((obj.xPct + pts[k].x * obj.wPct / 100) * tc.width / 100, (obj.yPct + pts[k].y * obj.hPct / 100) * tc.height / 100); }
                 tctx.stroke();
                 tctx.restore();
               }
@@ -3303,8 +4059,8 @@
                 tctx.lineCap = 'round'; tctx.lineJoin = 'round';
                 tctx.beginPath();
                 const pts = obj.pathData;
-                if (pts.length > 0) { tctx.moveTo(pts[0].x * tc.width / 100, pts[0].y * tc.height / 100); }
-                for (let k = 1; k < pts.length; k++) { tctx.lineTo(pts[k].x * tc.width / 100, pts[k].y * tc.height / 100); }
+                if (pts.length > 0) { tctx.moveTo((obj.xPct + pts[0].x * obj.wPct / 100) * tc.width / 100, (obj.yPct + pts[0].y * obj.hPct / 100) * tc.height / 100); }
+                for (let k = 1; k < pts.length; k++) { tctx.lineTo((obj.xPct + pts[k].x * obj.wPct / 100) * tc.width / 100, (obj.yPct + pts[k].y * obj.hPct / 100) * tc.height / 100); }
                 tctx.stroke();
                 tctx.restore();
               }
@@ -3464,6 +4220,54 @@ ${pagesHtml}
       showToast('帯を手動追加しました');
     }
 
+    function insertObiAsEditObject() {
+      if (!pdfDoc) { showToast('PDFを開いてください'); return; }
+      if (!obiImage || !obiImage.naturalWidth) {
+        showToast('帯画像が設定されていません。「帯画像を管理」から追加してください');
+        return;
+      }
+
+      const activeEntry = getActiveObiEntry();
+      const isLocked = !activeEntry || activeEntry.lockAspect !== false;
+
+      // 帯画像のアスペクト比を維持して横幅100%で配置
+      const obiAR = obiImage.naturalWidth / obiImage.naturalHeight;
+      const vp = pdfPages[currentPage].page.getViewport({ scale: RENDER_SCALE, rotation: getPageRotation(currentPage) });
+      const wPct = 100;
+      let hPct;
+      if (isLocked) {
+        const hPx = (vp.width * wPct / 100) / obiAR;
+        hPct = Math.min(hPx / vp.height * 100, 30); // 最大30%
+      } else {
+        hPct = 15; // 自由変形時はデフォルト15%
+      }
+      const yPct = 100 - hPct; // 下端に配置
+
+      // 帯画像をdataURLに変換
+      const c = document.createElement('canvas');
+      c.width = obiImage.naturalWidth;
+      c.height = obiImage.naturalHeight;
+      c.getContext('2d').drawImage(obiImage, 0, 0);
+      const dataURL = c.toDataURL('image/png');
+
+      const obj = {
+        id: ++editObjIdCounter,
+        type: 'image',
+        xPct: 0,
+        yPct: yPct,
+        wPct: wPct,
+        hPct: hPct,
+        dataURL: dataURL,
+        isObiImage: true,
+      };
+      pushUndo();
+      getPageEditObjects().push(obj);
+      selectedEditObj = obj;
+      renderEditObjects();
+      updateMenuStates();
+      showToast('帯画像を挿入しました');
+    }
+
     function addWhiteBoxOnly() {
       if (!pdfDoc) { showToast('PDFを開いてください'); return; }
       const pd = pdfPages[currentPage];
@@ -3613,7 +4417,7 @@ ${pagesHtml}
           whiteBoxDragRAF = requestAnimationFrame(() => {
             whiteBoxDragRAF = null;
             if (!whiteBoxDrag) return;
-            const dx = (whiteBoxDrag._lastCX - whiteBoxDrag.startX) / viewerZoom, dy = (whiteBoxDrag._lastCY - whiteBoxDrag.startY) / viewerZoom;
+            const dx = whiteBoxDrag._lastCX - whiteBoxDrag.startX, dy = whiteBoxDrag._lastCY - whiteBoxDrag.startY;
             const o = whiteBoxDrag.origRect, dw = whiteBoxDrag.displayW, dh = whiteBoxDrag.displayH;
             const wbEl = document.getElementById('whiteBoxOverlay');
             let nx=o.x, ny=o.y, nw=o.w, nh=o.h;
@@ -3641,7 +4445,7 @@ ${pagesHtml}
           obiDragRAF = requestAnimationFrame(() => {
             obiDragRAF = null;
             if (!obiDrag) return;
-            const dx = (obiDrag._lastCX - obiDrag.startX) / viewerZoom, dy = (obiDrag._lastCY - obiDrag.startY) / viewerZoom;
+            const dx = obiDrag._lastCX - obiDrag.startX, dy = obiDrag._lastCY - obiDrag.startY;
             const o = obiDrag.origRect, dw = obiDrag.displayW, dh = obiDrag.displayH;
             let nx=o.x, ny=o.y, nw=o.w, nh=o.h;
             if (obiDrag.type === 'move') {
@@ -3653,6 +4457,18 @@ ${pagesHtml}
               if (h.includes('r')) { nw=Math.max(20,Math.min(dw-o.x,o.w+dx)); }
               if (h.includes('t')) { ny=Math.max(0,Math.min(o.y+o.h-20,o.y+dy)); nh=o.h-(ny-o.y); }
               if (h.includes('b')) { nh=Math.max(20,Math.min(dh-o.y,o.h+dy)); }
+
+              // lockAspect: 縦横比固定リサイズ
+              const activeEntry = getActiveObiEntry();
+              const isLocked = !activeEntry || activeEntry.lockAspect !== false;
+              if (isLocked && obiImage && obiImage.naturalWidth) {
+                const aspect = o.w / o.h;
+                if (h === 'br' || h === 'tr') { nh = nw / aspect; }
+                else if (h === 'bl' || h === 'tl') { nw = nh * aspect; nx = o.x + o.w - nw; }
+                else if (h === 'r' || h === 'l') { nh = nw / aspect; }
+                else if (h === 't' || h === 'b') { nw = nh * aspect; }
+                if (h === 'tl' || h === 'tr' || h === 't') { ny = o.y + o.h - nh; }
+              }
             }
             obiOverlay.style.left=nx+'px'; obiOverlay.style.top=ny+'px';
             obiOverlay.style.width=nw+'px'; obiOverlay.style.height=nh+'px';
@@ -3722,26 +4538,83 @@ ${pagesHtml}
       return editObjects[currentPage];
     }
 
+    // テキストの表示サイズを計測してPct値を返す
+    function measureTextBox(text, fontSize, fontFamily) {
+      const dW = canvas.clientWidth || canvas.width;
+      const dH = canvas.clientHeight || canvas.height;
+      const span = document.createElement('span');
+      span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-size:${fontSize}px;font-family:${fontFamily};padding:4px;`;
+      span.textContent = text || 'テキスト';
+      document.body.appendChild(span);
+      const tw = span.offsetWidth + 16; // padding + 余白
+      const th = span.offsetHeight + 8;
+      document.body.removeChild(span);
+      // ピクセル → パーセント変換
+      const wPct = Math.max(3, Math.min(90, tw / dW * 100));
+      const hPct = Math.max(2, Math.min(50, th / dH * 100));
+      return { wPct, hPct };
+    }
+
+    // テキストオブジェクトのサイズを内容に合わせて自動調整
+    function autoResizeTextObj(obj) {
+      if (obj.type !== 'text') return;
+      const fontSize = obj.fontSize || 14;
+      const fontFamily = obj.fontFamily || 'Noto Sans JP, sans-serif';
+      const text = obj.text || '';
+      const lines = text.split('\n');
+      const dW = canvas.clientWidth || canvas.width;
+      const dH = canvas.clientHeight || canvas.height;
+
+      const span = document.createElement('span');
+      span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-size:${fontSize}px;font-family:${fontFamily};padding:4px;`;
+      document.body.appendChild(span);
+      // 最も長い行の幅を取得
+      let maxW = 0;
+      for (const line of lines) {
+        span.textContent = line || ' ';
+        maxW = Math.max(maxW, span.offsetWidth);
+      }
+      const lineH = span.offsetHeight;
+      document.body.removeChild(span);
+
+      const tw = maxW + 16;
+      const th = lineH * lines.length + 8;
+      const newW = Math.max(3, Math.min(90, tw / dW * 100));
+      const newH = Math.max(2, Math.min(50, th / dH * 100));
+      // 現在のサイズより大きい場合のみ拡張（ユーザーが手動で大きくしたものは縮めない）
+      if (newW > obj.wPct) obj.wPct = newW;
+      if (newH > obj.hPct) obj.hPct = newH;
+    }
+
     function insertEditObject(type, imgData) {
       if (!pdfDoc) { showToast('PDFを開いてください'); return; }
       const obj = {
         id: ++editObjIdCounter,
         type: type,
         xPct: 10, yPct: 10,
-        wPct: type === 'text' ? 30 : 20,
-        hPct: type === 'text' ? 8 : 15,
+        wPct: type === 'text' ? 0 : 20,  // テキストは後で自動計算
+        hPct: type === 'text' ? 0 : 15,
         text: type === 'text' ? 'テキスト' : '',
         color: '#000000',
         img: null,
         dataURL: null,
       };
+      if (type === 'text') {
+        // テキストの初期サイズを文字幅から計算
+        const fontSize = obj.fontSize || 14;
+        const measuredSize = measureTextBox(obj.text || 'テキスト', fontSize, obj.fontFamily || 'Noto Sans JP, sans-serif');
+        obj.wPct = measuredSize.wPct;
+        obj.hPct = measuredSize.hPct;
+      }
       if (type === 'shape') {
-        obj.shapeType = 'rect'; // rect, circle, triangle, polygon
+        obj.shapeType = 'circle'; // rect, circle, triangle, polygon
         obj.fillColor = '#ffffff';
-        obj.fillOpacity = 1;
-        obj.strokeColor = '#000000';
+        obj.fillOpacity = 0;
+        obj.strokeColor = '#ff0000';
         obj.strokeWidth = 2;
         obj.strokeStyle = 'solid'; // solid, dashed, dotted
+        obj.lockCircle = true; // 正円を維持
+        obj.hPct = obj.wPct * (canvas.width / canvas.height); // 正方形に見えるよう高さ補正
       }
       if (type === 'image' && imgData) {
         obj.img = imgData.img;
@@ -3948,12 +4821,70 @@ ${pagesHtml}
             el.appendChild(img);
           } else if (obj.type === 'stamp') {
             const stampEl = document.createElement('div');
+            el._stampEl = stampEl;
+            const bgC = obj.bgColor || '#ffffff';
+            const bgO = obj.bgOpacity ?? 1.0;
+            const borderCSS = obj.stampBorder !== false ? 'border:3px solid ' + (obj.color || '#d32f2f') + ';' : '';
             stampEl.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
-              'border:3px solid ' + (obj.color || '#d32f2f') + ';border-radius:4px;' +
+              borderCSS + 'border-radius:4px;' +
+              'background:' + bgC + ';opacity:' + bgO + ';' +
               'color:' + (obj.color || '#d32f2f') + ';font-weight:900;font-size:clamp(10px,2.5vw,32px);' +
               'font-family:"Noto Sans JP",sans-serif;pointer-events:none;text-align:center;padding:2px;';
             stampEl.textContent = obj.text || '';
             el.appendChild(stampEl);
+
+            // スタンプ設定バー
+            const sbar = document.createElement('div');
+            sbar.className = 'shape-settings-bar';
+            sbar.addEventListener('mousedown', (e) => e.stopPropagation());
+
+            const mkLabel = (t) => { const s = document.createElement('span'); s.className = 'setting-label'; s.textContent = t; return s; };
+
+            // 文字色
+            sbar.appendChild(mkLabel('文字'));
+            const colorIn = document.createElement('input');
+            colorIn.type = 'color'; colorIn.value = obj.color || '#d32f2f';
+            colorIn.addEventListener('input', () => { obj.color = colorIn.value; refreshStamp(); });
+            sbar.appendChild(colorIn);
+
+            // 背景色
+            sbar.appendChild(mkLabel('背景'));
+            const bgIn = document.createElement('input');
+            bgIn.type = 'color'; bgIn.value = obj.bgColor || '#ffffff';
+            bgIn.addEventListener('input', () => { obj.bgColor = bgIn.value; refreshStamp(); });
+            sbar.appendChild(bgIn);
+
+            // 透過率
+            sbar.appendChild(mkLabel('透過'));
+            const opIn = document.createElement('input');
+            opIn.type = 'range'; opIn.min = '0'; opIn.max = '1'; opIn.step = '0.05';
+            opIn.value = obj.bgOpacity ?? 1.0;
+            opIn.style.width = '60px';
+            opIn.addEventListener('input', () => { obj.bgOpacity = parseFloat(opIn.value); refreshStamp(); });
+            sbar.appendChild(opIn);
+
+            // 枠線トグル
+            const borderBtn = document.createElement('button');
+            borderBtn.textContent = obj.stampBorder !== false ? '枠あり' : '枠なし';
+            borderBtn.addEventListener('click', () => {
+              obj.stampBorder = !obj.stampBorder;
+              borderBtn.textContent = obj.stampBorder ? '枠あり' : '枠なし';
+              refreshStamp();
+            });
+            sbar.appendChild(borderBtn);
+
+            el.appendChild(sbar);
+
+            function refreshStamp() {
+              const bc = obj.bgColor || '#ffffff';
+              const bo = obj.bgOpacity ?? 1.0;
+              const bd = obj.stampBorder !== false ? 'border:3px solid ' + (obj.color || '#d32f2f') + ';' : '';
+              stampEl.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
+                bd + 'border-radius:4px;' +
+                'background:' + bc + ';opacity:' + bo + ';' +
+                'color:' + (obj.color || '#d32f2f') + ';font-weight:900;font-size:clamp(10px,2.5vw,32px);' +
+                'font-family:"Noto Sans JP",sans-serif;pointer-events:none;text-align:center;padding:2px;';
+            }
           } else if (obj.type === 'line') {
             el.classList.add('line-obj');
             const svgNS = 'http://www.w3.org/2000/svg';
@@ -4046,7 +4977,11 @@ ${pagesHtml}
             ta.style.color = obj.color || '#000000';
             if (obj.fontSize) ta.style.fontSize = obj.fontSize + 'px';
             if (obj.fontFamily) ta.style.fontFamily = obj.fontFamily;
-            ta.addEventListener('input', () => { obj.text = ta.value; });
+            ta.addEventListener('input', () => {
+              obj.text = ta.value;
+              autoResizeTextObj(obj);
+              renderEditObjects();
+            });
             // ダブルクリックで編集モード、通常はドラッグ可能
             el.addEventListener('dblclick', (e) => {
               ta.classList.add('editing');
@@ -4074,11 +5009,21 @@ ${pagesHtml}
               if ((obj.fontFamily || 'Noto Sans JP') === f) opt.selected = true;
               fontSel.appendChild(opt);
             });
-            fontSel.addEventListener('change', () => { obj.fontFamily = fontSel.value; ta.style.fontFamily = fontSel.value; });
+            fontSel.addEventListener('change', () => {
+              obj.fontFamily = fontSel.value;
+              ta.style.fontFamily = fontSel.value;
+              autoResizeTextObj(obj);
+              renderEditObjects();
+            });
             const sizeInput = document.createElement('input');
             sizeInput.type = 'number'; sizeInput.min = '8'; sizeInput.max = '72';
             sizeInput.value = obj.fontSize || '14'; sizeInput.title = 'フォントサイズ';
-            sizeInput.addEventListener('change', () => { obj.fontSize = parseInt(sizeInput.value) || 14; ta.style.fontSize = obj.fontSize + 'px'; });
+            sizeInput.addEventListener('change', () => {
+              obj.fontSize = parseInt(sizeInput.value) || 14;
+              ta.style.fontSize = obj.fontSize + 'px';
+              autoResizeTextObj(obj);
+              renderEditObjects();
+            });
             const colorInput = document.createElement('input');
             colorInput.type = 'color'; colorInput.value = obj.color || '#000000';
             colorInput.style.cssText = 'width:24px;height:24px;padding:0;border:1px solid var(--border);border-radius:3px;cursor:pointer;';
@@ -4134,10 +5079,35 @@ ${pagesHtml}
               if ((obj.shapeType || 'rect') === v) opt.selected = true;
               typeSel.appendChild(opt);
             });
+            // 正円チェックボックス
+            const circleCheck = document.createElement('input');
+            circleCheck.type = 'checkbox';
+            circleCheck.checked = obj.lockCircle === true;
+            circleCheck.title = '正円を維持';
+            circleCheck.style.cssText = 'margin:0 2px;cursor:pointer;';
+            circleCheck.addEventListener('change', () => {
+              obj.lockCircle = circleCheck.checked;
+              if (circleCheck.checked) {
+                // 正方形に補正（幅基準で高さを合わせる）
+                const aspectFix = canvas.width / canvas.height;
+                obj.hPct = obj.wPct * aspectFix;
+                renderEditObjects();
+              }
+            });
+            const circleLbl = document.createElement('span');
+            circleLbl.className = 'setting-label'; circleLbl.textContent = '正円';
+            // 正円チェックは円タイプ時のみ表示
+            const updateCircleCheckVis = () => {
+              const show = typeSel.value === 'circle';
+              circleLbl.style.display = show ? '' : 'none';
+              circleCheck.style.display = show ? '' : 'none';
+            };
+
             typeSel.addEventListener('change', () => {
               obj.shapeType = typeSel.value;
               shapeWrap.innerHTML = '';
               shapeWrap.appendChild(buildShapeSVG(obj));
+              updateCircleCheckVis();
             });
             // 塗り色
             const fillLbl = document.createElement('span');
@@ -4193,9 +5163,11 @@ ${pagesHtml}
               shapeWrap.innerHTML = ''; shapeWrap.appendChild(buildShapeSVG(obj));
             });
             sbar.appendChild(typeSel);
+            sbar.appendChild(circleLbl); sbar.appendChild(circleCheck);
             sbar.appendChild(fillLbl); sbar.appendChild(fillInput); sbar.appendChild(opacitySlider); sbar.appendChild(opacityVal);
             sbar.appendChild(strokeLbl); sbar.appendChild(strokeInput); sbar.appendChild(widthInput);
             sbar.appendChild(styleSel);
+            updateCircleCheckVis();
             el.appendChild(sbar);
 
             // 多角形の頂点ハンドル
@@ -4218,7 +5190,7 @@ ${pagesHtml}
 
           // リサイズハンドル（多角形・直線以外）
           if (!(obj.type === 'shape' && obj.shapeType === 'polygon') && obj.type !== 'line') {
-            ['tl','tr','bl','br'].forEach(h => {
+            ['tl','tr','bl','br','tm','bm','ml','mr'].forEach(h => {
               const hEl = document.createElement('div');
               hEl.className = `edit-obj-handle ${h}`;
               hEl.dataset.handle = h;
@@ -4272,8 +5244,11 @@ ${pagesHtml}
       updateMenuStates();
     }
 
-    // キャンバスクリックで選択解除
-    canvas.addEventListener('mousedown', () => {
+    // キャンバス周辺クリックで選択解除（edit-objectやオーバーレイ以外をクリック時）
+    document.getElementById('pdfCanvasWrapper').addEventListener('mousedown', (e) => {
+      // edit-object内部（ハンドル・設定バー含む）やオーバーレイのクリックは除外
+      const target = e.target;
+      if (target.closest('.edit-object') || target.closest('.obi-overlay') || target.closest('.white-box-overlay')) return;
       if (selectedEditObj) {
         selectedEditObj = null;
         editObjDomMap.forEach(el => el.classList.remove('selected'));
@@ -4294,13 +5269,14 @@ ${pagesHtml}
       // 座標だけ保存して、描画はrAFで1フレームに1回
       editDrag._lastClientX = e.clientX;
       editDrag._lastClientY = e.clientY;
+      editDrag._lastShiftKey = e.shiftKey;
 
       if (!editDragRAF) {
         editDragRAF = requestAnimationFrame(() => {
           editDragRAF = null;
           if (!editDrag) return;
-          const dx = (editDrag._lastClientX - editDrag.startX) / viewerZoom;
-          const dy = (editDrag._lastClientY - editDrag.startY) / viewerZoom;
+          const dx = editDrag._lastClientX - editDrag.startX;
+          const dy = editDrag._lastClientY - editDrag.startY;
           const o = editDrag.origRect, dw = editDrag.displayW, dh = editDrag.displayH;
           let nx=o.x, ny=o.y, nw=o.w, nh=o.h;
           if (editDrag.type === 'move') {
@@ -4312,6 +5288,20 @@ ${pagesHtml}
             if (h.includes('r')) { nw=Math.max(20,Math.min(dw-o.x,o.w+dx)); }
             if (h.includes('t')) { ny=Math.max(0,Math.min(o.y+o.h-20,o.y+dy)); nh=o.h-(ny-o.y); }
             if (h.includes('b')) { nh=Math.max(20,Math.min(dh-o.y,o.h+dy)); }
+            // Shiftキーでアスペクト比固定
+            if (editDrag._lastShiftKey) {
+              const aspect = o.w / o.h;
+              if (h === 'br' || h === 'tr') { nh = nw / aspect; }
+              else if (h === 'bl' || h === 'tl') { nw = nh * aspect; nx = o.x + o.w - nw; }
+              if (h === 'tl' || h === 'tr') { ny = o.y + o.h - nh; }
+            }
+            // 正円ロック: 幅と高さを同じにする（表示上の正方形＝正円）
+            if (editDrag.obj.lockCircle && editDrag.obj.shapeType === 'circle') {
+              const size = Math.max(nw, nh);
+              if (h.includes('l')) { nx = o.x + o.w - size; }
+              if (h.includes('t')) { ny = o.y + o.h - size; }
+              nw = size; nh = size;
+            }
           }
           editDrag.el.style.left=nx+'px'; editDrag.el.style.top=ny+'px';
           editDrag.el.style.width=nw+'px'; editDrag.el.style.height=nh+'px';
@@ -4326,8 +5316,8 @@ ${pagesHtml}
       const dw=editDrag.displayW, dh=editDrag.displayH;
       const el = editDrag.el;
       // 最終マウス位置で確定
-      const dx = ((editDrag._lastClientX || editDrag.startX) - editDrag.startX) / viewerZoom;
-      const dy = ((editDrag._lastClientY || editDrag.startY) - editDrag.startY) / viewerZoom;
+      const dx = (editDrag._lastClientX || editDrag.startX) - editDrag.startX;
+      const dy = (editDrag._lastClientY || editDrag.startY) - editDrag.startY;
       const o = editDrag.origRect;
       let nx=o.x, ny=o.y, nw=o.w, nh=o.h;
       if (editDrag.type === 'move') {
@@ -4339,6 +5329,20 @@ ${pagesHtml}
         if (h.includes('r')) { nw=Math.max(20,Math.min(dw-o.x,o.w+dx)); }
         if (h.includes('t')) { ny=Math.max(0,Math.min(o.y+o.h-20,o.y+dy)); nh=o.h-(ny-o.y); }
         if (h.includes('b')) { nh=Math.max(20,Math.min(dh-o.y,o.h+dy)); }
+        // Shiftキーでアスペクト比固定
+        if (editDrag._lastShiftKey) {
+          const aspect = o.w / o.h;
+          if (h === 'br' || h === 'tr') { nh = nw / aspect; }
+          else if (h === 'bl' || h === 'tl') { nw = nh * aspect; nx = o.x + o.w - nw; }
+          if (h === 'tl' || h === 'tr') { ny = o.y + o.h - nh; }
+        }
+        // 正円ロック
+        if (editDrag.obj.lockCircle && editDrag.obj.shapeType === 'circle') {
+          const size = Math.max(nw, nh);
+          if (h.includes('l')) { nx = o.x + o.w - size; }
+          if (h.includes('t')) { ny = o.y + o.h - size; }
+          nw = size; nh = size;
+        }
       }
       el.style.left=nx+'px'; el.style.top=ny+'px';
       el.style.width=nw+'px'; el.style.height=nh+'px';
@@ -4408,8 +5412,8 @@ ${pagesHtml}
       e.preventDefault();
       const { obj, endpoint, el, origObj } = lineEpDrag;
       const dW = canvas.clientWidth, dH = canvas.clientHeight;
-      const dxPct = (e.clientX - lineEpDrag.startX) / viewerZoom / dW * 100;
-      const dyPct = (e.clientY - lineEpDrag.startY) / viewerZoom / dH * 100;
+      const dxPct = (e.clientX - lineEpDrag.startX) / dW * 100;
+      const dyPct = (e.clientY - lineEpDrag.startY) / dH * 100;
 
       // 移動中の端点の絶対座標(ページ%)
       let movePctX = origObj.xPct + origObj[endpoint === 'start' ? 'x1Pct' : 'x2Pct'] / 100 * origObj.wPct + dxPct;
@@ -4596,8 +5600,8 @@ ${pagesHtml}
       const dW = canvas.clientWidth, dH = canvas.clientHeight;
 
       // マウス移動量をページ%に変換
-      const dxPct = (e.clientX - vtxDrag.startX) / viewerZoom / dW * 100;
-      const dyPct = (e.clientY - vtxDrag.startY) / viewerZoom / dH * 100;
+      const dxPct = (e.clientX - vtxDrag.startX) / dW * 100;
+      const dyPct = (e.clientY - vtxDrag.startY) / dH * 100;
 
       // 頂点の絶対位置(ページ%)を計算
       const absX = origObj.xPct + origPts[vertexIdx].x / 100 * origObj.wPct + dxPct;
@@ -4680,11 +5684,23 @@ ${pagesHtml}
       for (const entry of obiImages) {
         const item = document.createElement('div');
         item.className = 'obi-list-item' + (obiImage === entry.img ? ' active-obi' : '');
+        const isLocked = entry.lockAspect !== false;
         item.innerHTML = `
           <img src="${entry.dataURL}">
           <div class="obi-info">
             <div class="obi-name">${entry.name}</div>
             <div style="color:var(--text-muted);font-size:11px;">${obiImage === entry.img ? '✓ 使用中' : ''}</div>
+            <div style="margin-top:4px;display:flex;align-items:center;gap:6px;font-size:11px;">
+              <span style="color:var(--text-muted);">縦横比:</span>
+              <label style="display:flex;align-items:center;gap:3px;cursor:pointer;" title="縦横比を固定">
+                <input type="radio" name="aspect-${entry.id}" value="lock" ${isLocked ? 'checked' : ''} data-aspect-id="${entry.id}" data-aspect-val="lock" style="margin:0;">
+                <span style="color:${isLocked ? 'var(--accent)' : 'var(--text-muted)'};">固定</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:3px;cursor:pointer;" title="自由変形">
+                <input type="radio" name="aspect-${entry.id}" value="free" ${!isLocked ? 'checked' : ''} data-aspect-id="${entry.id}" data-aspect-val="free" style="margin:0;">
+                <span style="color:${!isLocked ? 'var(--accent)' : 'var(--text-muted)'};">自由変形</span>
+              </label>
+            </div>
           </div>
           <div class="obi-actions">
             <button class="select-btn" data-id="${entry.id}">${obiImage === entry.img ? '使用中' : '選択'}</button>
@@ -4704,6 +5720,18 @@ ${pagesHtml}
             updateObiStatus();
             renderObiList();
             showToast('帯画像を選択しました');
+          }
+        });
+      });
+      list.querySelectorAll('[data-aspect-id]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          const id = parseFloat(radio.dataset.aspectId);
+          const val = radio.dataset.aspectVal;
+          const entry = obiImages.find(e => e.id === id);
+          if (entry) {
+            entry.lockAspect = (val === 'lock');
+            renderObiList();
+            showToast(entry.lockAspect ? '縦横比を固定にしました' : '自由変形にしました');
           }
         });
       });
@@ -4752,7 +5780,7 @@ ${pagesHtml}
       reader.onload = (ev) => {
         const img = new Image();
         img.onload = () => {
-          const entry = { id: Date.now() + Math.random(), name: file.name, img, dataURL: ev.target.result };
+          const entry = { id: Date.now() + Math.random(), name: file.name, img, dataURL: ev.target.result, lockAspect: true };
           obiImages.push(entry);
           if (!obiImage) obiImage = img;
           updateObiStatus();
@@ -4825,6 +5853,8 @@ ${pagesHtml}
         wPct: 40, hPct: 12,
         text: text,
         color: color || '#d32f2f',
+        bgColor: '#ffffff',
+        bgOpacity: 1.0,
         stampBorder: true,
       };
       pushUndo();
@@ -4834,6 +5864,137 @@ ${pagesHtml}
       updateMenuStates();
       showToast('スタンプ「' + text + '」を挿入しました');
     }
+
+    // ===== カスタム画像スタンプ =====
+    const CUSTOM_STAMPS_KEY = 'obi-tool-custom-stamps';
+
+    function loadCustomStamps() {
+      try {
+        const data = localStorage.getItem(CUSTOM_STAMPS_KEY);
+        return data ? JSON.parse(data) : [];
+      } catch (e) { return []; }
+    }
+
+    function saveCustomStamps(stamps) {
+      localStorage.setItem(CUSTOM_STAMPS_KEY, JSON.stringify(stamps));
+    }
+
+    function renderCustomStampGrid() {
+      const grid = document.getElementById('customStampGrid');
+      grid.innerHTML = '';
+      const stamps = loadCustomStamps();
+      if (stamps.length === 0) {
+        grid.innerHTML = '<span style="font-size:11px;color:#999;">保存された画像スタンプはありません</span>';
+        return;
+      }
+      stamps.forEach((stamp, idx) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'position:relative;width:64px;height:64px;border:1px solid var(--border);border-radius:4px;cursor:pointer;overflow:hidden;background:#fff;';
+        item.title = stamp.name || '画像スタンプ';
+        const img = document.createElement('img');
+        img.src = stamp.dataURL;
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;';
+        item.appendChild(img);
+        // 削除ボタン
+        const delBtn = document.createElement('div');
+        delBtn.style.cssText = 'position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#d32f2f;color:#fff;border-radius:50%;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;';
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const all = loadCustomStamps();
+          all.splice(idx, 1);
+          saveCustomStamps(all);
+          renderCustomStampGrid();
+        });
+        item.appendChild(delBtn);
+        // クリックで挿入
+        item.addEventListener('click', () => {
+          document.getElementById('stampModal').classList.remove('show');
+          insertImageStamp(stamp.dataURL, stamp.name);
+        });
+        item.addEventListener('mouseenter', () => { item.style.borderColor = 'var(--accent)'; });
+        item.addEventListener('mouseleave', () => { item.style.borderColor = 'var(--border)'; });
+        grid.appendChild(item);
+      });
+    }
+
+    function insertImageStamp(dataURL, name) {
+      if (!pdfDoc) return;
+      const obj = {
+        id: ++editObjIdCounter,
+        type: 'image',
+        xPct: 25, yPct: 25,
+        wPct: 20, hPct: 20,
+        dataURL: dataURL,
+        isStampImage: true,
+      };
+      pushUndo();
+      getPageEditObjects().push(obj);
+      selectedEditObj = obj;
+      renderEditObjects();
+      updateMenuStates();
+      showToast('画像スタンプを挿入しました');
+    }
+
+    document.getElementById('stampImageUploadBtn').addEventListener('click', () => {
+      document.getElementById('stampImageFileInput').click();
+    });
+
+    function resizeImageToDataURL(file, maxSize) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            // 小さい画像はそのまま
+            if (img.width <= maxSize && img.height <= maxSize) {
+              resolve(ev.target.result);
+              return;
+            }
+            const c = document.createElement('canvas');
+            const ratio = Math.min(maxSize / img.width, maxSize / img.height);
+            c.width = img.width * ratio;
+            c.height = img.height * ratio;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/png'));
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById('stampImageFileInput').addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const stamps = loadCustomStamps();
+      for (const file of Array.from(files)) {
+        try {
+          const dataURL = await resizeImageToDataURL(file, 512);
+          stamps.push({ name: file.name, dataURL: dataURL });
+        } catch (err) {
+          console.error('画像読み込みエラー:', err);
+        }
+      }
+      try {
+        saveCustomStamps(stamps);
+      } catch (err) {
+        showToast('保存容量を超えました。不要なスタンプを削除してください');
+        e.target.value = '';
+        return;
+      }
+      renderCustomStampGrid();
+      showToast(files.length + '個の画像スタンプを追加しました');
+      e.target.value = '';
+    });
+
+    // スタンプモーダルが表示される度にカスタムスタンプを読み込む
+    const stampModalEl = document.getElementById('stampModal');
+    const stampModalObserver = new MutationObserver(() => {
+      if (stampModalEl.classList.contains('show')) renderCustomStampGrid();
+    });
+    stampModalObserver.observe(stampModalEl, { attributes: true, attributeFilter: ['class'] });
 
     // ===== Image export =====
     document.getElementById('exportImageModalClose').addEventListener('click', () => {
@@ -4927,9 +6088,21 @@ ${pagesHtml}
         else if (obj.type === 'image' && obj.img) { ctx.drawImage(obj.img, ox, oy, ow, oh); }
         else if (obj.type === 'stamp') {
           ctx.save();
-          ctx.strokeStyle = obj.color || '#d32f2f';
-          ctx.lineWidth = Math.max(2, oh * 0.06);
-          ctx.strokeRect(ox + 4, oy + 4, ow - 8, oh - 8);
+          // 背景
+          const bgO = obj.bgOpacity ?? 1.0;
+          if (bgO > 0) {
+            ctx.globalAlpha = bgO;
+            ctx.fillStyle = obj.bgColor || '#ffffff';
+            ctx.fillRect(ox, oy, ow, oh);
+            ctx.globalAlpha = 1.0;
+          }
+          // 枠線
+          if (obj.stampBorder !== false) {
+            ctx.strokeStyle = obj.color || '#d32f2f';
+            ctx.lineWidth = Math.max(2, oh * 0.06);
+            ctx.strokeRect(ox + 4, oy + 4, ow - 8, oh - 8);
+          }
+          // テキスト
           ctx.fillStyle = obj.color || '#d32f2f';
           const fs = Math.min(oh * 0.55, ow * 0.3);
           ctx.font = 'bold ' + fs + 'px "Noto Sans JP", sans-serif';
@@ -4959,8 +6132,8 @@ ${pagesHtml}
           ctx.lineCap = 'round'; ctx.lineJoin = 'round';
           ctx.beginPath();
           const pts = obj.pathData;
-          if (pts.length > 0) { ctx.moveTo(pts[0].x * cw / 100, pts[0].y * ch / 100); }
-          for (let i = 1; i < pts.length; i++) { ctx.lineTo(pts[i].x * cw / 100, pts[i].y * ch / 100); }
+          if (pts.length > 0) { ctx.moveTo((obj.xPct + pts[0].x * obj.wPct / 100) * cw / 100, (obj.yPct + pts[0].y * obj.hPct / 100) * ch / 100); }
+          for (let i = 1; i < pts.length; i++) { ctx.lineTo((obj.xPct + pts[i].x * obj.wPct / 100) * cw / 100, (obj.yPct + pts[i].y * obj.hPct / 100) * ch / 100); }
           ctx.stroke();
           ctx.restore();
         }
@@ -4972,8 +6145,8 @@ ${pagesHtml}
           ctx.lineCap = 'round'; ctx.lineJoin = 'round';
           ctx.beginPath();
           const pts = obj.pathData;
-          if (pts.length > 0) { ctx.moveTo(pts[0].x * cw / 100, pts[0].y * ch / 100); }
-          for (let i = 1; i < pts.length; i++) { ctx.lineTo(pts[i].x * cw / 100, pts[i].y * ch / 100); }
+          if (pts.length > 0) { ctx.moveTo((obj.xPct + pts[0].x * obj.wPct / 100) * cw / 100, (obj.yPct + pts[0].y * obj.hPct / 100) * ch / 100); }
+          for (let i = 1; i < pts.length; i++) { ctx.lineTo((obj.xPct + pts[i].x * obj.wPct / 100) * cw / 100, (obj.yPct + pts[i].y * obj.hPct / 100) * ch / 100); }
           ctx.stroke();
           ctx.restore();
         }
@@ -5069,6 +6242,31 @@ ${pagesHtml}
       }
     }
 
+    // pathData(0-100座標)から実際のバウンディングボックスを算出し、座標をリマップ
+    function shrinkPathBounds(points, marginPct) {
+      marginPct = marginPct || 2; // パディング(%)
+      let minX = 100, maxX = 0, minY = 100, maxY = 0;
+      for (const pt of points) {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.y > maxY) maxY = pt.y;
+      }
+      // マージンを追加
+      minX = Math.max(0, minX - marginPct);
+      maxX = Math.min(100, maxX + marginPct);
+      minY = Math.max(0, minY - marginPct);
+      maxY = Math.min(100, maxY + marginPct);
+      const bw = maxX - minX || 1;
+      const bh = maxY - minY || 1;
+      // 座標を新バウンディングボックス内の0-100にリマップ
+      const remapped = points.map(pt => ({
+        x: (pt.x - minX) / bw * 100,
+        y: (pt.y - minY) / bh * 100,
+      }));
+      return { xPct: minX, yPct: minY, wPct: bw, hPct: bh, pathData: remapped };
+    }
+
     function createFreehandCanvas() {
       removeFreehandCanvas();
       freehandCanvas = document.createElement('canvas');
@@ -5092,16 +6290,18 @@ ${pagesHtml}
         penDrawing = false;
         if (penPoints.length > 1) {
           pushUndo();
+          const bounds = shrinkPathBounds(penPoints);
           const obj = {
             id: ++editObjIdCounter,
             type: 'freehand',
-            xPct: 0, yPct: 0, wPct: 100, hPct: 100,
+            xPct: bounds.xPct, yPct: bounds.yPct, wPct: bounds.wPct, hPct: bounds.hPct,
             color: penColor,
             penWidth: penWidth,
-            pathData: [...penPoints],
+            pathData: bounds.pathData,
           };
           getPageEditObjects().push(obj);
           renderEditObjects();
+          updateMenuStates();
         }
         fctx.clearRect(0, 0, freehandCanvas.width, freehandCanvas.height);
         penPoints = [];
@@ -5207,17 +6407,19 @@ ${pagesHtml}
         markerDrawing = false;
         if (markerPoints.length > 1) {
           pushUndo();
+          const bounds = shrinkPathBounds(markerPoints, 3); // マーカーは太いので余白多め
           const obj = {
             id: ++editObjIdCounter,
             type: 'marker',
-            xPct: 0, yPct: 0, wPct: 100, hPct: 100,
+            xPct: bounds.xPct, yPct: bounds.yPct, wPct: bounds.wPct, hPct: bounds.hPct,
             color: markerColor,
             markerWidth: markerWidth,
             markerOpacity: markerOpacity,
-            pathData: [...markerPoints],
+            pathData: bounds.pathData,
           };
           getPageEditObjects().push(obj);
           renderEditObjects();
+          updateMenuStates();
         }
         mctx.clearRect(0, 0, markerCanvas.width, markerCanvas.height);
         markerPoints = [];
@@ -5434,6 +6636,16 @@ ${pagesHtml}
 
       currentToolMode = mode;
 
+      // ツールモード切替時に編集オブジェクト・オーバーレイの選択を解除
+      if (selectedEditObj) {
+        selectedEditObj = null;
+        editObjDomMap.forEach(el => el.classList.remove('selected'));
+      }
+      if (selectedOverlay) {
+        selectOverlay(null);
+      }
+      updateMenuStates();
+
       // Update toolbar button states
       document.querySelectorAll('#toolbar .toolbar-btn[id^="tool"]').forEach(btn => {
         btn.classList.remove('active');
@@ -5456,17 +6668,12 @@ ${pagesHtml}
       } else if (mode === 'text') {
         if (!pdfDoc) { showToast('PDFを開いてください'); setToolMode('select'); return; }
         insertEditObject('text');
-        // After inserting, go back to select mode
-        setTimeout(() => setToolMode('select'), 100);
       } else if (mode === 'shape') {
         if (!pdfDoc) { showToast('PDFを開いてください'); setToolMode('select'); return; }
         insertEditObject('shape');
-        setTimeout(() => setToolMode('select'), 100);
       } else if (mode === 'stamp') {
         if (!pdfDoc) { showToast('PDFを開いてください'); setToolMode('select'); return; }
         document.getElementById('stampModal').classList.add('show');
-        // After stamp modal closes, return to select mode
-        setTimeout(() => setToolMode('select'), 100);
       } else if (mode === 'polygon') {
         startPolygonMode();
       } else if (mode === 'line') {
@@ -5481,7 +6688,19 @@ ${pagesHtml}
     }
 
     // Toolbar button event listeners
-    document.getElementById('toolSelect').addEventListener('click', () => setToolMode('select'));
+    document.getElementById('toolSelect').addEventListener('click', () => {
+      // 既に選択モードなら選択解除のみ
+      if (currentToolMode === 'select') {
+        if (selectedEditObj) {
+          selectedEditObj = null;
+          editObjDomMap.forEach(el => el.classList.remove('selected'));
+        }
+        if (selectedOverlay) { selectOverlay(null); }
+        updateMenuStates();
+      } else {
+        setToolMode('select');
+      }
+    });
     document.getElementById('toolText').addEventListener('click', () => setToolMode('text'));
     document.getElementById('toolShape').addEventListener('click', () => setToolMode('shape'));
     document.getElementById('toolStamp').addEventListener('click', () => setToolMode('stamp'));
@@ -5489,6 +6708,24 @@ ${pagesHtml}
     document.getElementById('toolPolygon').addEventListener('click', () => setToolMode('polygon'));
     document.getElementById('toolLine').addEventListener('click', () => setToolMode('line'));
     document.getElementById('toolMarker').addEventListener('click', () => setToolMode('marker'));
+    document.getElementById('toolInsertImage').addEventListener('click', () => {
+      document.getElementById('imageFileInput').click();
+    });
+
+    // ツールバー: 帯グループ
+    document.getElementById('toolManualObi').addEventListener('click', () => addManualObi());
+    document.getElementById('toolInsertObiImage').addEventListener('click', () => insertObiAsEditObject());
+    document.getElementById('toolAddWhiteBox').addEventListener('click', () => addWhiteBoxOnly());
+    document.getElementById('toolRunObi').addEventListener('click', () => processBandChange());
+
+    // ツールバー: 編集グループ
+    document.getElementById('toolRotateCW').addEventListener('click', () => {
+      if (pdfDoc) rotatePage(currentPage, 90);
+    });
+    document.getElementById('toolRotateCCW').addEventListener('click', () => {
+      if (pdfDoc) rotatePage(currentPage, -90);
+    });
+    document.getElementById('toolDeleteObj').addEventListener('click', () => deleteSelectedObject());
 
     // Pen settings controls
     document.getElementById('penColorInput').addEventListener('input', (e) => {
@@ -5696,17 +6933,36 @@ ${pagesHtml}
         return;
       }
       bar.style.display = 'flex';
+      // 紹介コード表示（ログイン中なら常に表示）
+      const refArea = document.getElementById('referralCodeArea');
+      if (refArea) refArea.style.display = 'inline';
       const s = info.status;
       if (s === 'trial') {
         const end = info.trialEnd ? new Date(info.trialEnd) : null;
         const days = end ? Math.max(0, Math.ceil((end - new Date()) / (1000*60*60*24))) : '?';
         status.innerHTML = '\u2139\ufe0f \u30c8\u30e9\u30a4\u30a2\u30eb\u4e2d\uff08\u6b8b\u308a' + days + '\u65e5\uff09 - ' + (info.email || '');
         status.style.color = '#1976d2';
-      } else if (s === 'active') {
+      } else if (s === 'active' || s === 'canceling') {
         const end = info.currentPeriodEnd ? new Date(info.currentPeriodEnd).toLocaleDateString('ja-JP') : '';
-        const planLabel = info.plan === 'campaign' ? '\u30ad\u30e3\u30f3\u30da\u30fc\u30f3' : '\u30b9\u30bf\u30f3\u30c0\u30fc\u30c9';
-        status.innerHTML = '\u2705 \u30e9\u30a4\u30bb\u30f3\u30b9\u6709\u52b9\uff08' + planLabel + ' / ' + end + '\u307e\u3067\uff09 - ' + (info.email || '');
-        status.style.color = '#388e3c';
+        let planLabel = '\u30b9\u30bf\u30f3\u30c0\u30fc\u30c9';
+        let planColor = '#388e3c';
+        if (info.plan === 'vip') {
+          planLabel = 'VIP';
+          planColor = '#7b1fa2';
+        } else if (info.plan === 'friends') {
+          planLabel = 'FRIENDS';
+          planColor = '#0288d1';
+        } else if (info.plan === 'admin') {
+          planLabel = '\u7ba1\u7406\u8005';
+          planColor = '#e65100';
+        }
+        let statusText = '\u2705 \u30e9\u30a4\u30bb\u30f3\u30b9\u6709\u52b9\uff08' + planLabel + ' / ' + end + '\u307e\u3067\uff09';
+        if (s === 'canceling') {
+          statusText = '\u26a0\ufe0f \u89e3\u7d04\u4e88\u5b9a\uff08' + planLabel + ' / ' + end + '\u307e\u3067\u5229\u7528\u53ef\uff09';
+          planColor = '#e65100';
+        }
+        status.innerHTML = statusText + ' - ' + (info.email || '');
+        status.style.color = planColor;
       } else {
         status.innerHTML = '\u26a0\ufe0f \u30e9\u30a4\u30bb\u30f3\u30b9: ' + s + ' - ' + (info.email || '');
         status.style.color = '#d32f2f';
@@ -5788,6 +7044,15 @@ ${pagesHtml}
     });
 
     // ログアウト
+    document.getElementById('referralCodeArea').addEventListener('click', () => {
+      navigator.clipboard.writeText('FRENDS').then(() => {
+        const refArea = document.getElementById('referralCodeArea');
+        const orig = refArea.innerHTML;
+        refArea.innerHTML = '<strong style="color:#388e3c;">コピーしました!</strong>';
+        setTimeout(() => { refArea.innerHTML = orig; }, 1500);
+      });
+    });
+
     document.getElementById('licenseLogoutLink').addEventListener('click', async (e) => {
       e.preventDefault();
       await window.electronAPI.licenseLogout();
@@ -5800,13 +7065,152 @@ ${pagesHtml}
     // サブスク管理（Stripe Customer Portal）
     document.getElementById('licenseManageLink').addEventListener('click', async (e) => {
       e.preventDefault();
-      const result = await window.electronAPI.licensePortal();
-      if (result.success && result.url) {
-        // 外部ブラウザで開く
-        window.open(result.url, '_blank');
-      } else {
-        showToast('\u30b5\u30d6\u30b9\u30af\u7ba1\u7406\u30da\u30fc\u30b8\u3092\u958b\u3051\u307e\u305b\u3093\u3067\u3057\u305f');
+      // モーダルにプラン情報を反映
+      const info = await window.electronAPI.licenseInfo();
+      const planEl = document.getElementById('subModalPlan');
+      const statusEl = document.getElementById('subModalStatus');
+      const periodEl = document.getElementById('subModalPeriod');
+      const promoSection = document.getElementById('subPromoSection');
+      const promoResult = document.getElementById('subPromoResult');
+      promoResult.style.display = 'none';
+      document.getElementById('subPromoInput').value = '';
+
+      if (info) {
+        let planName = 'スタンダード（¥500/月）';
+        if (info.plan === 'vip') planName = 'VIP（無料）';
+        else if (info.plan === 'friends') planName = 'FRIENDS（¥100/月）';
+        else if (info.plan === 'admin') planName = '管理者';
+        planEl.textContent = planName;
+
+        if (info.status === 'trial') {
+          const end = info.trialEnd ? new Date(info.trialEnd) : null;
+          const days = end ? Math.max(0, Math.ceil((end - new Date()) / (1000*60*60*24))) : '?';
+          statusEl.textContent = 'トライアル中（残り' + days + '日）';
+          statusEl.style.color = '#1976d2';
+        } else if (info.status === 'active') {
+          statusEl.textContent = '有効';
+          statusEl.style.color = '#388e3c';
+        } else {
+          statusEl.textContent = info.status;
+          statusEl.style.color = '#d32f2f';
+        }
+
+        if (info.currentPeriodEnd) {
+          periodEl.textContent = '次回更新: ' + new Date(info.currentPeriodEnd).toLocaleDateString('ja-JP');
+        } else if (info.trialEnd) {
+          periodEl.textContent = 'トライアル終了: ' + new Date(info.trialEnd).toLocaleDateString('ja-JP');
+        } else {
+          periodEl.textContent = '';
+        }
+
+        // VIPはコード入力不要
+        promoSection.style.display = (info.plan === 'vip' || info.plan === 'admin') ? 'none' : 'block';
+
+        // 解約ボタン：active状態のサブスクがある場合のみ表示（トライアル・管理者は非表示）
+        const cancelSection = document.getElementById('subCancelSection');
+        const hasSub = (info.status === 'active' || info.status === 'trial') && info.plan !== 'admin' && info.status !== 'canceling';
+        cancelSection.style.display = hasSub ? 'block' : 'none';
+        document.getElementById('subCancelConfirm').style.display = 'none';
+        document.getElementById('subCancelResult').style.display = 'none';
       }
+
+      // バージョン表示
+      if (window.electronAPI && window.electronAPI.getAppInfo) {
+        window.electronAPI.getAppInfo().then(info => {
+          document.getElementById('subModalVersion').textContent = 'v' + (info.version || '-');
+        });
+      }
+
+      document.getElementById('subscriptionModal').style.display = 'flex';
+    });
+
+    document.getElementById('subModalCloseBtn').addEventListener('click', () => {
+      document.getElementById('subscriptionModal').style.display = 'none';
+    });
+
+    document.getElementById('subscriptionModal').addEventListener('click', (e) => {
+      if (e.target.id === 'subscriptionModal') {
+        document.getElementById('subscriptionModal').style.display = 'none';
+      }
+    });
+
+    document.getElementById('subPromoApplyBtn').addEventListener('click', async () => {
+      const code = document.getElementById('subPromoInput').value.trim();
+      const resultEl = document.getElementById('subPromoResult');
+      if (!code) {
+        resultEl.style.display = 'block';
+        resultEl.style.background = '#fff0f0';
+        resultEl.style.color = '#d32f2f';
+        resultEl.textContent = 'コードを入力してください';
+        return;
+      }
+      const btn = document.getElementById('subPromoApplyBtn');
+      btn.disabled = true;
+      btn.textContent = '適用中...';
+      try {
+        const result = await window.electronAPI.applyPromoCode(code);
+        resultEl.style.display = 'block';
+        if (result.success) {
+          resultEl.style.background = '#f0fff0';
+          resultEl.style.color = '#388e3c';
+          resultEl.textContent = result.message || 'コードが適用されました！';
+          // ライセンスバーを更新
+          const info = await window.electronAPI.licenseVerify();
+          if (info.valid) updateLicenseBar(info.license);
+        } else {
+          resultEl.style.background = '#fff0f0';
+          resultEl.style.color = '#d32f2f';
+          resultEl.textContent = result.message || 'コードの適用に失敗しました';
+        }
+      } catch (err) {
+        resultEl.style.display = 'block';
+        resultEl.style.background = '#fff0f0';
+        resultEl.style.color = '#d32f2f';
+        resultEl.textContent = 'エラーが発生しました';
+      }
+      btn.disabled = false;
+      btn.textContent = '適用';
+    });
+
+    // 解約ボタン
+    document.getElementById('subCancelBtn').addEventListener('click', () => {
+      document.getElementById('subCancelConfirm').style.display = 'block';
+    });
+
+    document.getElementById('subCancelNo').addEventListener('click', () => {
+      document.getElementById('subCancelConfirm').style.display = 'none';
+    });
+
+    document.getElementById('subCancelYes').addEventListener('click', async () => {
+      const resultEl = document.getElementById('subCancelResult');
+      const yesBtn = document.getElementById('subCancelYes');
+      yesBtn.disabled = true;
+      yesBtn.textContent = '処理中...';
+      try {
+        const result = await window.electronAPI.cancelSubscription();
+        resultEl.style.display = 'block';
+        if (result.success) {
+          resultEl.style.background = '#f0fff0';
+          resultEl.style.color = '#388e3c';
+          resultEl.textContent = result.message || '解約が完了しました。現在の期間終了まで引き続きご利用いただけます。';
+          document.getElementById('subCancelConfirm').style.display = 'none';
+          document.getElementById('subCancelBtn').style.display = 'none';
+          // ライセンス情報を更新
+          const info = await window.electronAPI.licenseVerify();
+          if (info.valid) updateLicenseBar(info.license);
+        } else {
+          resultEl.style.background = '#fff0f0';
+          resultEl.style.color = '#d32f2f';
+          resultEl.textContent = result.message || '解約に失敗しました';
+        }
+      } catch (err) {
+        resultEl.style.display = 'block';
+        resultEl.style.background = '#fff0f0';
+        resultEl.style.color = '#d32f2f';
+        resultEl.textContent = 'エラーが発生しました';
+      }
+      yesBtn.disabled = false;
+      yesBtn.textContent = '解約する';
     });
 
     // Enterキーでログイン
@@ -5868,42 +7272,76 @@ ${pagesHtml}
 
       if (!window.electronAPI || !window.electronAPI.onUpdateStatus) return;
 
+      let updateState = { status: 'up-to-date', version: null, percent: 0 };
+      const notifyBtn = document.getElementById('updateNotifyBtn');
+      const badge = document.getElementById('updateBadge');
+      const popup = document.getElementById('updatePopup');
+      const popupTitle = document.getElementById('updatePopupTitle');
+      const popupBody = document.getElementById('updatePopupBody');
+      const popupActions = document.getElementById('updatePopupActions');
+      const progressBar = document.getElementById('updateProgressBar');
+      const progressFill = document.getElementById('updateProgressFill');
+      const installBtn = document.getElementById('updateInstallBtn');
+
+      // 通知ベルを常に表示
+      notifyBtn.style.display = 'inline-flex';
+
+      function updateNotifyUI() {
+        const s = updateState.status;
+        if (s === 'available') {
+          badge.style.display = 'block';
+          popupTitle.textContent = '新しいバージョンがあります';
+          popupBody.textContent = 'v' + updateState.version + ' が利用可能です。自動ダウンロード中...';
+          popupActions.style.display = 'none';
+          progressBar.style.display = 'none';
+        } else if (s === 'downloading') {
+          badge.style.display = 'block';
+          popupTitle.textContent = 'ダウンロード中...';
+          popupBody.textContent = 'v' + updateState.version + ' をダウンロードしています (' + updateState.percent + '%)';
+          popupActions.style.display = 'none';
+          progressBar.style.display = 'block';
+          progressFill.style.width = updateState.percent + '%';
+        } else if (s === 'downloaded') {
+          badge.style.display = 'block';
+          popupTitle.textContent = 'アップデート準備完了';
+          popupBody.textContent = 'v' + updateState.version + ' のインストール準備ができました。再起動するとアップデートが適用されます。';
+          popupActions.style.display = 'flex';
+          progressBar.style.display = 'none';
+        } else {
+          badge.style.display = 'none';
+          popupTitle.textContent = 'アップデート情報';
+          popupBody.textContent = '最新バージョンです';
+          popupActions.style.display = 'none';
+          progressBar.style.display = 'none';
+        }
+      }
+
+      notifyBtn.addEventListener('click', () => {
+        popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+        updateNotifyUI();
+      });
+
+      document.getElementById('updatePopupClose').addEventListener('click', (e) => {
+        e.preventDefault();
+        popup.style.display = 'none';
+      });
+
+      installBtn.addEventListener('click', () => {
+        window.electronAPI.updateInstall();
+      });
+
       window.electronAPI.onUpdateStatus((data) => {
-        if (data.status === 'available') {
-          banner.style.display = 'block';
-          banner.innerHTML = '<div style="font-weight:700;margin-bottom:8px;">新しいバージョン v' + data.version + ' が利用可能です</div>'
-            + '<div style="display:flex;gap:8px;margin-top:10px;">'
-            + '<button id="update-dl-btn" style="flex:1;padding:8px 12px;border-radius:8px;border:none;background:linear-gradient(135deg,#2563eb,#06b6d4);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">ダウンロード</button>'
-            + '<button id="update-dismiss-btn" style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:#94a3b8;font-size:12px;cursor:pointer;">後で</button>'
-            + '</div>';
-          document.getElementById('update-dl-btn').onclick = () => {
-            window.electronAPI.updateDownload();
-          };
-          document.getElementById('update-dismiss-btn').onclick = () => {
-            banner.style.display = 'none';
-          };
-        } else if (data.status === 'downloading') {
-          banner.style.display = 'block';
-          banner.innerHTML = '<div style="font-weight:700;margin-bottom:8px;">ダウンロード中... ' + data.percent + '%</div>'
-            + '<div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">'
-            + '<div style="height:100%;width:' + data.percent + '%;background:linear-gradient(90deg,#2563eb,#06b6d4);border-radius:2px;transition:width 0.3s;"></div>'
-            + '</div>';
-        } else if (data.status === 'downloaded') {
-          banner.style.display = 'block';
-          banner.innerHTML = '<div style="font-weight:700;margin-bottom:8px;">v' + data.version + ' のインストール準備完了</div>'
-            + '<div style="color:#94a3b8;font-size:12px;margin-bottom:10px;">再起動するとアップデートが適用されます</div>'
-            + '<div style="display:flex;gap:8px;">'
-            + '<button id="update-restart-btn" style="flex:1;padding:8px 12px;border-radius:8px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-weight:600;font-size:12px;cursor:pointer;">今すぐ再起動</button>'
-            + '<button id="update-later-btn" style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:#94a3b8;font-size:12px;cursor:pointer;">後で</button>'
-            + '</div>';
-          document.getElementById('update-restart-btn').onclick = () => {
-            window.electronAPI.updateInstall();
-          };
-          document.getElementById('update-later-btn').onclick = () => {
-            banner.style.display = 'none';
-          };
+        updateState = { ...updateState, ...data };
+        updateNotifyUI();
+
+        // downloaded 状態になったらポップアップ自動表示
+        if (data.status === 'downloaded') {
+          popup.style.display = 'block';
         }
       });
+
+      // バナーは不要（ポップアップに統一）
+      banner.style.display = 'none';
     })();
   </script>
 </body>
