@@ -9,7 +9,8 @@
   <script src="lib/pdf.min.js"></script>
   <script src="lib/pdf_viewer.min.js"></script>
   <script src="lib/jspdf.umd.min.js"></script>
-  <script src="lib/tesseract.min.js"></script>
+  <!-- OCR: PaddleOCR via IPC (Tesseract.js removed) -->
+  <script src="lib/jsQR.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
 
@@ -946,6 +947,8 @@
       <symbol id="i-rotate-ccw" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.12-9.36L1 10"/></symbol>
       <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
       <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></symbol>
       <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></symbol>
       <symbol id="i-undo" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.12-9.36L1 10"/></symbol>
       <symbol id="i-redo" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
@@ -996,6 +999,10 @@
       <div class="menu-dropdown" id="menu-edit">
         <div class="menu-dropdown-item disabled" id="menuUndo"><span class="icon-svg"><svg><use href="#i-undo"/></svg></span>元に戻す<span class="shortcut">Ctrl+Z</span></div>
         <div class="menu-dropdown-item disabled" id="menuRedo"><span class="icon-svg"><svg><use href="#i-redo"/></svg></span>やり直し<span class="shortcut">Ctrl+Y</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-dropdown-item disabled" id="menuCopyObj"><span class="icon-svg"><svg><use href="#i-copy"/></svg></span>コピー<span class="shortcut">Ctrl+C</span></div>
+        <div class="menu-dropdown-item disabled" id="menuPasteObj"><span class="icon-svg"><svg><use href="#i-clipboard"/></svg></span>貼り付け<span class="shortcut">Ctrl+V</span></div>
+        <div class="menu-dropdown-item disabled" id="menuDuplicateObj"><span class="icon-svg"><svg><use href="#i-layers"/></svg></span>複製<span class="shortcut">Ctrl+D</span></div>
         <div class="menu-sep"></div>
         <div class="menu-dropdown-item" id="menuInsertImage"><span class="icon-svg"><svg><use href="#i-image"/></svg></span>画像を挿入</div>
         <div class="menu-dropdown-item" id="menuInsertText"><span class="icon-svg"><svg><use href="#i-type"/></svg></span>テキストを挿入</div>
@@ -1309,6 +1316,9 @@
     <div class="context-menu-item" id="ctxRotateCW"><span class="icon-svg"><svg><use href="#i-rotate-cw"/></svg></span>右に90°回転</div>
     <div class="context-menu-item" id="ctxRotateCCW"><span class="icon-svg"><svg><use href="#i-rotate-ccw"/></svg></span>左に90°回転</div>
     <div class="context-menu-sep"></div>
+    <div class="context-menu-item disabled" id="ctxCopyObj"><span class="icon-svg"><svg><use href="#i-copy"/></svg></span>コピー</div>
+    <div class="context-menu-item disabled" id="ctxPasteObj"><span class="icon-svg"><svg><use href="#i-clipboard"/></svg></span>貼り付け</div>
+    <div class="context-menu-item disabled" id="ctxDuplicateObj"><span class="icon-svg"><svg><use href="#i-layers"/></svg></span>複製</div>
     <div class="context-menu-item disabled" id="ctxDeleteObj"><span class="icon-svg"><svg><use href="#i-trash"/></svg></span>削除</div>
     <div class="context-menu-sep"></div>
     <div class="context-menu-item disabled" id="ctxRunObi"><span class="icon-svg"><svg><use href="#i-zap"/></svg></span>帯チェン実行</div>
@@ -1489,6 +1499,9 @@
         </div>
         <div class="shortcut-section">編集</div>
         <div class="shortcut-grid">
+          <span class="key">Ctrl+C</span><span class="desc">オブジェクトをコピー</span>
+          <span class="key">Ctrl+V</span><span class="desc">オブジェクトを貼り付け</span>
+          <span class="key">Ctrl+D</span><span class="desc">オブジェクトを複製</span>
           <span class="key">Delete</span><span class="desc">選択オブジェクト削除</span>
           <span class="key">右クリック</span><span class="desc">コンテキストメニュー</span>
         </div>
@@ -1549,6 +1562,7 @@
     let editObjIdCounter = 0;
     let selectedEditObj = null;
     let editDrag = null;
+    let clipboardObj = null;  // コピー/ペースト用クリップボード
 
     // ===== Undo/Redo =====
     const undoStack = [];
@@ -1675,6 +1689,10 @@
     let tabs = []; // [{ id, name, filePath, state: { pdfDoc, pdfPages, currentPage, ... } }]
     let activeTabId = null;
     let tabIdCounter = 0;
+    // ロード世代カウンタ: PDF読み込み/タブ切替のたびにインクリメントし、
+    // 進行中のasync処理は完了時に世代を比較してstaleならスキップする
+    // (これでタブ切替後に古いPDFのrenderやautoOrientが新タブに混入するのを防ぐ)
+    let loadGeneration = 0;
 
     // ===== Freehand drawing state =====
     let currentToolMode = 'select'; // 'select' | 'text' | 'shape' | 'stamp' | 'pen' | 'polygon' | 'line' | 'marker'
@@ -1851,6 +1869,18 @@
       closeAllMenus();
       setToolMode('shape');
     });
+    document.getElementById('menuCopyObj').addEventListener('click', () => {
+      closeAllMenus();
+      copySelectedObject();
+    });
+    document.getElementById('menuPasteObj').addEventListener('click', () => {
+      closeAllMenus();
+      pasteObject();
+    });
+    document.getElementById('menuDuplicateObj').addEventListener('click', () => {
+      closeAllMenus();
+      duplicateSelectedObject();
+    });
     document.getElementById('menuDeleteObj').addEventListener('click', () => {
       closeAllMenus();
       deleteSelectedObject();
@@ -1910,11 +1940,22 @@
 
     // ===== 図面の方向を自動で揃える =====
     async function detectPageOrientation(pageIdx) {
-      // テキストのtransform行列から向きを判定
-      // 戻り値: 0, 90, 180, 270 (正しい向きにするために必要な回転角度)
+      // 戻り値: 0, 90, 180, 270 (表示時に viewport へ渡す「絶対回転角度」)
+      //   ※ viewer.html の getViewport({rotation: X}) は pdf.js のネイティブ回転を上書きするため
+      //     この戻り値がそのまま「表示時の絶対回転」として使われる
       const pd = pdfPages[pageIdx];
       if (!pd.page) return 0;
 
+      const nativeRotation = pd.page.rotate || 0;
+
+      // ① PDFにネイティブ回転が指定されている場合 → それが正解
+      //   (PDF作成者が意図した向き。テキストtransformから再計算すると縦書きや混在ページで誤判定する)
+      if (nativeRotation !== 0) {
+        console.log(`[autoOrient] ページ${pageIdx + 1}: native=${nativeRotation}° → ネイティブ回転を採用`);
+        return nativeRotation;
+      }
+
+      // ② ネイティブ回転がない場合 → テキストtransformから判定
       const tc = await pd.page.getTextContent();
       const items = tc.items.filter(it => it.str && it.str.trim().length > 0);
 
@@ -1924,61 +1965,57 @@
       }
 
       // transform行列: [a, b, c, d, e, f]
-      // 正位置(0°):   a>0, b≈0, c≈0, d>0  → atan2(b,a) ≈ 0
-      // 90°回転:      a≈0, b>0, c<0(?), d≈0 → atan2(b,a) ≈ 90
-      // 180°回転:     a<0, b≈0, c≈0, d<0  → atan2(b,a) ≈ 180
-      // 270°回転:     a≈0, b<0, c>0(?), d≈0 → atan2(b,a) ≈ 270
       const votes = { 0: 0, 90: 0, 180: 0, 270: 0 };
-
       for (const item of items) {
         const t = item.transform;
         if (!t || t.length < 4) continue;
         const a = t[0], b = t[1];
-        // atan2でテキストの角度を取得
         let angleDeg = Math.round(Math.atan2(b, a) * 180 / Math.PI);
         if (angleDeg < 0) angleDeg += 360;
-        // 最も近い90度単位にスナップ
         const snapped = Math.round(angleDeg / 90) * 90 % 360;
         if (votes.hasOwnProperty(snapped)) {
-          // 文字列長で重み付け（長いテキストほど信頼度高い）
           votes[snapped] += item.str.length;
         }
       }
 
-      // 最多得票の角度を検出
+      // 信頼度チェック: 主軸が圧倒的でない場合 (混在ページなど) は OSD にフォールバック
       let dominant = 0;
       let maxVote = 0;
+      let totalVote = 0;
       for (const [angle, count] of Object.entries(votes)) {
-        if (count > maxVote) {
-          maxVote = count;
-          dominant = parseInt(angle);
-        }
+        totalVote += count;
+        if (count > maxVote) { maxVote = count; dominant = parseInt(angle); }
+      }
+      const dominantRatio = totalVote > 0 ? maxVote / totalVote : 0;
+      if (dominantRatio < 0.7) {
+        console.log(`[autoOrient] ページ${pageIdx + 1}: テキスト主軸の信頼度低 (${(dominantRatio*100).toFixed(0)}%) → OSDフォールバック`);
+        return await detectOrientationByOSD(pageIdx);
       }
 
-      // dominant が現在のテキストの向き → 正位置にするには逆回転
-      // テキストが0°なら回転不要、90°なら-90° (=270°)回転が必要
-      const correction = (360 - dominant) % 360;
-      return correction;
+      // dominant: PDF user space におけるテキストの主な角度
+      // テキストを正立させるための viewport 絶対回転 = (360 - dominant) % 360
+      const targetRotation = (360 - dominant) % 360;
+      console.log(`[autoOrient] ページ${pageIdx + 1}: native=${nativeRotation}°, テキスト主軸=${dominant}° (信頼度${(dominantRatio*100).toFixed(0)}%), 必要な絶対回転=${targetRotation}°`);
+      return targetRotation;
     }
 
     async function detectOrientationByOSD(pageIdx) {
-      // 画像ベースPDF: OCRで各回転のテキスト認識信頼度を比較
+      // 画像ベースPDF: PaddleOCRで各回転のテキスト認識量を比較
       const pd = pdfPages[pageIdx];
       if (!pd.page) return 0;
 
       try {
         if (!ocrReady && !ocrInitializing) await initOcrWorker();
-        if (!ocrReady || !ocrWorker) return 0;
+        if (!ocrReady) return 0;
 
         // 低解像度でレンダリング（OSD判定には十分）
         const baseVP = pd.page.getViewport({ scale: 1, rotation: getPageRotation(pageIdx) });
         const scale = Math.min(1.5, 1200 / Math.max(baseVP.width, baseVP.height));
 
         let bestRotation = 0;
-        let bestConfidence = -1;
+        let bestScore = -1;
 
         // 0° と 180° を試行（横書きマイソクなら大半はこの2つ）
-        // 90° と 270° は 0°/180° の信頼度が低い場合のみ
         const rotations = [0, 180];
 
         for (const rot of rotations) {
@@ -1989,18 +2026,24 @@
           const tmpCtx = tmpCanvas.getContext('2d');
           await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
 
-          const result = await ocrWorker.recognize(tmpCanvas);
-          const conf = result.data.confidence || 0;
-          console.log(`[autoOrient] ページ${pageIdx + 1} 回転${rot}°: 信頼度=${conf.toFixed(1)}`);
+          const ocrResult = await _paddleOcrCanvas(tmpCanvas);
+          // PaddleOCR: テキスト量 × 平均信頼度でスコア計算
+          let score = 0;
+          if (ocrResult && ocrResult.lines && ocrResult.lines.length > 0) {
+            const totalChars = ocrResult.lines.reduce((s, l) => s + (l.text || '').length, 0);
+            const avgScore = ocrResult.lines.reduce((s, l) => s + (l.score || 0), 0) / ocrResult.lines.length;
+            score = totalChars * avgScore;
+          }
+          console.log(`[autoOrient] ページ${pageIdx + 1} 回転${rot}°: スコア=${score.toFixed(1)} (lines=${ocrResult ? (ocrResult.lines || []).length : 0})`);
 
-          if (conf > bestConfidence) {
-            bestConfidence = conf;
+          if (score > bestScore) {
+            bestScore = score;
             bestRotation = rot;
           }
         }
 
-        // 0°/180°の信頼度が低い場合、90°/270°も試行
-        if (bestConfidence < 40) {
+        // 0°/180°のスコアが低い場合、90°/270°も試行
+        if (bestScore < 50) {
           for (const rot of [90, 270]) {
             const vp = pd.page.getViewport({ scale, rotation: ((pd.rotation || 0) + rot + 360) % 360 });
             const tmpCanvas = document.createElement('canvas');
@@ -2009,12 +2052,17 @@
             const tmpCtx = tmpCanvas.getContext('2d');
             await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
 
-            const result = await ocrWorker.recognize(tmpCanvas);
-            const conf = result.data.confidence || 0;
-            console.log(`[autoOrient] ページ${pageIdx + 1} 回転${rot}°: 信頼度=${conf.toFixed(1)}`);
+            const ocrResult = await _paddleOcrCanvas(tmpCanvas);
+            let score = 0;
+            if (ocrResult && ocrResult.lines && ocrResult.lines.length > 0) {
+              const totalChars = ocrResult.lines.reduce((s, l) => s + (l.text || '').length, 0);
+              const avgScore = ocrResult.lines.reduce((s, l) => s + (l.score || 0), 0) / ocrResult.lines.length;
+              score = totalChars * avgScore;
+            }
+            console.log(`[autoOrient] ページ${pageIdx + 1} 回転${rot}°: スコア=${score.toFixed(1)}`);
 
-            if (conf > bestConfidence) {
-              bestConfidence = conf;
+            if (score > bestScore) {
+              bestScore = score;
               bestRotation = rot;
             }
           }
@@ -2027,20 +2075,39 @@
       return 0;
     }
 
-    async function autoOrientPages() {
+    async function autoOrientPages(opts = {}) {
+      const silent = opts.silent === true;
+      // 呼び出し元から世代トークン/タブIDが渡されたら、その文脈でのみ実行
+      const expectedGen = (typeof opts.generation === 'number') ? opts.generation : null;
+      const expectedTabId = (typeof opts.tabId !== 'undefined') ? opts.tabId : null;
+
       if (!pdfDoc || totalPages === 0) return;
-      showLoading('図面の方向を解析中...');
-      pushUndo();
+      if (!silent) {
+        showLoading('図面の方向を解析中...');
+        pushUndo();
+      }
+
+      // 世代/タブが既に切り替わっていたら何もしない
+      const isStale = () => {
+        if (expectedGen !== null && expectedGen !== loadGeneration) return true;
+        if (expectedTabId !== null && expectedTabId !== activeTabId) return true;
+        return false;
+      };
 
       let correctedCount = 0;
       try {
         for (let i = 0; i < totalPages; i++) {
-          showLoading(`図面の方向を解析中... (${i + 1}/${totalPages})`);
-          const correction = await detectPageOrientation(i);
-          if (correction !== 0) {
-            const pd = pdfPages[i];
-            pd.rotation = ((pd.rotation || 0) + correction + 360) % 360;
-            // 帯チェン処理済みキャンバスを無効化
+          if (isStale()) { console.log('[autoOrient] stale検知 → 中断'); return; }
+          if (!silent) {
+            showLoading(`図面の方向を解析中... (${i + 1}/${totalPages})`);
+          }
+          const targetRotation = await detectPageOrientation(i);
+          if (isStale()) { console.log('[autoOrient] stale検知 → 中断'); return; }
+          const pd = pdfPages[i];
+          if (!pd) continue; // pdfPagesがクリアされた可能性
+          const currentRotation = pd.rotation || 0;
+          if (targetRotation !== currentRotation) {
+            pd.rotation = targetRotation;
             pd.processedCanvas = null;
             pd.whiteBox = null;
             pd.obiRect = null;
@@ -2049,21 +2116,27 @@
             correctedCount++;
           }
         }
+        if (isStale()) return;
         obiProcessed = pdfPages.some(p => p.whiteBox || p.obiRect);
         await renderCurrentPage();
+        if (isStale()) return;
         generateThumbnails();
         updateMenuStates();
 
-        if (correctedCount > 0) {
-          showToast(`${correctedCount}ページの方向を補正しました`);
-        } else {
-          showToast('すべてのページが正しい向きです');
+        if (!silent) {
+          if (correctedCount > 0) {
+            showToast(`${correctedCount}ページの方向を補正しました`);
+          } else {
+            showToast('すべてのページが正しい向きです');
+          }
+        } else if (correctedCount > 0) {
+          console.log(`[autoOrient] 読み込み時に ${correctedCount}ページを自動補正`);
         }
       } catch (e) {
         console.error('[autoOrient] エラー:', e);
-        showToast('方向の解析中にエラーが発生しました');
+        if (!silent) showToast('方向の解析中にエラーが発生しました');
       }
-      hideLoading();
+      if (!silent) hideLoading();
     }
 
     // File input handlers
@@ -2125,6 +2198,27 @@
       if (e.ctrlKey && (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey))) {
         e.preventDefault();
         performRedo();
+      }
+      // Ctrl+C: コピー
+      if (e.ctrlKey && e.key === 'c' && !e.shiftKey) {
+        if (selectedEditObj) {
+          e.preventDefault();
+          copySelectedObject();
+        }
+      }
+      // Ctrl+V: ペースト
+      if (e.ctrlKey && e.key === 'v' && !e.shiftKey) {
+        if (clipboardObj) {
+          e.preventDefault();
+          pasteObject();
+        }
+      }
+      // Ctrl+D: 複製
+      if (e.ctrlKey && e.key === 'd') {
+        if (selectedEditObj) {
+          e.preventDefault();
+          duplicateSelectedObject();
+        }
       }
       // Enter: 多角形確定
       if (e.key === 'Enter' && currentToolMode === 'polygon') {
@@ -2449,6 +2543,9 @@
       // Update enabled states
       const hasObj = !!selectedEditObj || !!selectedOverlay;
       document.getElementById('ctxDeleteObj').classList.toggle('disabled', !hasObj);
+      document.getElementById('ctxCopyObj').classList.toggle('disabled', !selectedEditObj);
+      document.getElementById('ctxDuplicateObj').classList.toggle('disabled', !selectedEditObj);
+      document.getElementById('ctxPasteObj').classList.toggle('disabled', !clipboardObj);
       document.getElementById('ctxRunObi').classList.toggle('disabled', !pdfDoc);
     });
     document.getElementById('ctxInsertImage').addEventListener('click', () => {
@@ -2474,6 +2571,18 @@
     document.getElementById('ctxAddWhiteBox').addEventListener('click', () => {
       document.getElementById('contextMenu').classList.remove('show');
       addWhiteBoxOnly();
+    });
+    document.getElementById('ctxCopyObj').addEventListener('click', () => {
+      document.getElementById('contextMenu').classList.remove('show');
+      copySelectedObject();
+    });
+    document.getElementById('ctxPasteObj').addEventListener('click', () => {
+      document.getElementById('contextMenu').classList.remove('show');
+      pasteObject();
+    });
+    document.getElementById('ctxDuplicateObj').addEventListener('click', () => {
+      document.getElementById('contextMenu').classList.remove('show');
+      duplicateSelectedObject();
     });
     document.getElementById('ctxDeleteObj').addEventListener('click', () => {
       document.getElementById('contextMenu').classList.remove('show');
@@ -2782,6 +2891,11 @@
       updateUndoRedoMenu();
       document.getElementById('menuRunObi').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuDeleteObj').classList.toggle('disabled', !hasSelection);
+      // コピー/ペースト/複製
+      const hasObjSelection = !!selectedEditObj;
+      document.getElementById('menuCopyObj').classList.toggle('disabled', !hasObjSelection);
+      document.getElementById('menuDuplicateObj').classList.toggle('disabled', !hasObjSelection);
+      document.getElementById('menuPasteObj').classList.toggle('disabled', !clipboardObj);
       document.getElementById('menuAddManualObi').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuAddWhiteBox').classList.toggle('disabled', !hasPdf);
       document.getElementById('menuRemoveObi').classList.toggle('disabled', !hasPdf || (!pdfPages[currentPage]?.whiteBox && !pdfPages[currentPage]?.obiRect));
@@ -2841,7 +2955,18 @@
     }
 
     async function initPdfDoc(data) {
-      const pdf = await pdfjsLib.getDocument({ data }).promise;
+      // この読み込み操作の世代トークンを発行
+      const myGen = ++loadGeneration;
+      const myTabId = activeTabId;
+
+      const pdf = await pdfjsLib.getDocument({ data, cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', isEvalSupported: false }).promise;
+      // 読み込み完了時に世代やタブが変わっていたら破棄
+      if (myGen !== loadGeneration || myTabId !== activeTabId) {
+        console.log('[initPdfDoc] 読み込み中にタブ切替検知 → 破棄');
+        try { pdf.destroy && pdf.destroy(); } catch (e) {}
+        return;
+      }
+
       pdfDoc = pdf;
       totalPages = pdf.numPages;
       pdfPages = [];
@@ -2853,8 +2978,18 @@
 
       for (let i = 0; i < totalPages; i++) {
         const page = await pdf.getPage(i + 1);
-        pdfPages.push({ page, processedCanvas: null, detected: false, region: null, rotation: 0 });
+        if (myGen !== loadGeneration || myTabId !== activeTabId) {
+          console.log('[initPdfDoc] ページ取得中にタブ切替検知 → 破棄');
+          return;
+        }
+        // PDFネイティブ回転をデフォルトの初期値にする
+        // (pdf.jsの getViewport({rotation: X}) はネイティブを上書きするので、
+        //  rotation: 0 にすると native=90のページが横倒しで表示されてしまう)
+        const nativeRotation = page.rotate || 0;
+        pdfPages.push({ page, processedCanvas: null, detected: false, region: null, rotation: nativeRotation });
       }
+
+      if (myGen !== loadGeneration || myTabId !== activeTabId) return;
 
       currentPage = 0;
       canvasContainer.style.display = 'inline-block';
@@ -2867,9 +3002,17 @@
 
       totalPagesSpan.textContent = totalPages;
       await renderCurrentPage();
+      if (myGen !== loadGeneration || myTabId !== activeTabId) return;
       updatePageNav();
       updateMenuStates();
       generateThumbnails();
+
+      // PDF読み込み時の自動方向補正
+      // テキストの向きを解析して各ページを正立させる
+      // 世代トークンを保持し、完了時に有効性をチェック
+      autoOrientPages({ silent: true, generation: myGen, tabId: myTabId }).catch(e => {
+        console.warn('[initPdfDoc] 自動方向補正失敗:', e);
+      });
     }
 
     // ===== PDF Page Append (サイドバーへのPDFドロップで追加) =====
@@ -2901,20 +3044,31 @@
     }
 
     async function appendPdfPages(data, fileName) {
-      const pdf = await pdfjsLib.getDocument({ data }).promise;
+      const myGen = ++loadGeneration;
+      const myTabId = activeTabId;
+      const pdf = await pdfjsLib.getDocument({ data, cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', isEvalSupported: false }).promise;
+      if (myGen !== loadGeneration || myTabId !== activeTabId) {
+        try { pdf.destroy && pdf.destroy(); } catch (e) {}
+        return;
+      }
       const addCount = pdf.numPages;
-      const insertAt = pdfPages.length;
 
       for (let i = 0; i < addCount; i++) {
         const page = await pdf.getPage(i + 1);
-        pdfPages.push({ page, processedCanvas: null, detected: false, region: null, rotation: 0 });
+        if (myGen !== loadGeneration || myTabId !== activeTabId) return;
+        const nativeRotation = page.rotate || 0;
+        pdfPages.push({ page, processedCanvas: null, detected: false, region: null, rotation: nativeRotation });
       }
+      if (myGen !== loadGeneration || myTabId !== activeTabId) return;
 
       totalPages = pdfPages.length;
       totalPagesSpan.textContent = totalPages;
       updatePageNav();
       updateMenuStates();
       generateThumbnails();
+      // 追加されたページにも自動方向補正 (世代トークン渡し)
+      autoOrientPages({ silent: true, generation: myGen, tabId: myTabId })
+        .catch(e => console.warn('[appendPdfPages] 自動方向補正失敗:', e));
       showToast(`${fileName} (${addCount}ページ) を追加しました`);
     }
 
@@ -2942,13 +3096,33 @@
     }
 
     // ===== Thumbnails =====
+    // generateThumbnails の呼び出し世代カウンタ
+    // 同じタブ内で連続して呼ばれた場合でも、最新の呼び出し以外を必ずキャンセルする
+    let _thumbGenSeq = 0;
+
     async function generateThumbnails() {
       const sidebar = document.getElementById('sidebar');
       const thumbList = document.getElementById('thumbList');
+      // 世代/タブ/サムネ世代を保持: タブ切替・PDF再ロード・連続呼び出し全てを invalidate
+      const myGen = loadGeneration;
+      const myTabId = activeTabId;
+      const myPdfDoc = pdfDoc;
+      const myThumbGen = ++_thumbGenSeq;
       thumbList.innerHTML = '';
       if (!pdfDoc || totalPages === 0) return;
 
+      const isStale = () =>
+        myGen !== loadGeneration ||
+        myTabId !== activeTabId ||
+        myPdfDoc !== pdfDoc ||
+        myThumbGen !== _thumbGenSeq;
+
       for (let i = 0; i < totalPages; i++) {
+        if (isStale()) {
+          console.log('[generateThumbnails] stale検知 → 中断');
+          return;
+        }
+        if (!pdfPages[i] || !pdfPages[i].page) continue;
         const page = pdfPages[i].page;
         const viewport = page.getViewport({ scale: THUMB_SCALE, rotation: getPageRotation(i) });
         const tc = document.createElement('canvas');
@@ -2956,6 +3130,11 @@
         tc.height = viewport.height;
         const tctx = tc.getContext('2d');
         await page.render({ canvasContext: tctx, viewport }).promise;
+        // render完了後にも確認: 古い操作なら描画捨ててreturn
+        if (isStale()) {
+          console.log('[generateThumbnails] stale検知 → render結果破棄');
+          return;
+        }
 
         // If processed, overlay that
         if (pdfPages[i].processedCanvas) {
@@ -3003,9 +3182,12 @@
 
         item.appendChild(tc);
         item.appendChild(label);
+        // appendの直前にも世代チェック (タブ切替後に古いアイテムが混入するのを完全に防ぐ)
+        if (isStale()) return;
         thumbList.appendChild(item);
       }
 
+      if (isStale()) return;
       // Apply column layout
       const sw = sidebar.offsetWidth;
       if (sw > 0) updateThumbColumns(sw);
@@ -3356,6 +3538,9 @@
       const pd = pdfPages[pageIdx];
       if (!pd.page) return;
 
+      // OCRエンジンを事前初期化（画像ベースPDF対応）
+      if (!ocrReady && !ocrInitializing) await initOcrWorker();
+
       showLoading('帯チェン処理中...');
       try {
         const vp = pd.page.getViewport({ scale: RENDER_SCALE, rotation: getPageRotation(pageIdx) });
@@ -3365,17 +3550,16 @@
         const tmpCtx = tmpCanvas.getContext('2d');
         await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
 
-        const region = detectObiRegion(tmpCtx, tmpCanvas.width, tmpCanvas.height);
+        const region = await detectObiRegion(pd.page, tmpCanvas, getPageRotation(pageIdx));
         pd.detected = region.detected;
         pd.region = region;
 
         if (region.detected) {
-          // 白ボックスとOBIをセット（ページ範囲内にクランプ）
-          const xP = Math.max(0, Math.min(100, region.x / tmpCanvas.width * 100));
-          const yP = Math.max(0, Math.min(100, region.y / tmpCanvas.height * 100));
-          const wP = Math.min(100 - xP, region.w / tmpCanvas.width * 100);
-          const hP = Math.min(100 - yP, region.h / tmpCanvas.height * 100);
-          pd.whiteBox = { xPct: xP, yPct: yP, wPct: wP, hPct: hP };
+          const topPct = Math.max(0, Math.min(100, region.clearTopPct));
+          const botPct = Math.max(0, Math.min(100, region.clearBottomPct));
+          const leftPct = Math.max(0, Math.min(100, region.clearLeftPct || 0));
+          const rightPct = Math.max(0, Math.min(100, region.clearRightPct || 100));
+          pd.whiteBox = { xPct: leftPct, yPct: topPct, wPct: rightPct - leftPct, hPct: botPct - topPct };
           if (obiImage) {
             pd.obiRect = clampObiRect(pd.whiteBox, tmpCanvas.width, tmpCanvas.height);
           }
@@ -3502,7 +3686,7 @@
     async function runObiForPages(indices) {
       if (!pdfDoc || indices.length === 0) return;
       if (indices.length === 1) {
-        runObiForPage(indices[0]);
+        await runObiForPage(indices[0]);
         return;
       }
       showLoading('帯チェン処理中...');
@@ -3520,15 +3704,15 @@
           tmpCanvas.height = vp.height;
           const tmpCtx = tmpCanvas.getContext('2d');
           await pd.page.render({ canvasContext: tmpCtx, viewport: vp }).promise;
-          const region = detectObiRegion(tmpCtx, tmpCanvas.width, tmpCanvas.height);
+          const region = await detectObiRegion(pd.page, tmpCanvas, getPageRotation(pageIdx));
           pd.detected = region.detected;
           pd.region = region;
           if (region.detected) {
-            const rxP = Math.max(0, Math.min(100, region.x / tmpCanvas.width * 100));
-            const ryP = Math.max(0, Math.min(100, region.y / tmpCanvas.height * 100));
-            const rwP = Math.min(100 - rxP, region.w / tmpCanvas.width * 100);
-            const rhP = Math.min(100 - ryP, region.h / tmpCanvas.height * 100);
-            pd.whiteBox = { xPct: rxP, yPct: ryP, wPct: rwP, hPct: rhP };
+            const topPct = Math.max(0, Math.min(100, region.clearTopPct));
+            const botPct = Math.max(0, Math.min(100, region.clearBottomPct));
+            const leftPct = Math.max(0, Math.min(100, region.clearLeftPct || 0));
+            const rightPct = Math.max(0, Math.min(100, region.clearRightPct || 100));
+            pd.whiteBox = { xPct: leftPct, yPct: topPct, wPct: rightPct - leftPct, hPct: botPct - topPct };
             if (obiImage) {
               pd.obiRect = clampObiRect(pd.whiteBox, tmpCanvas.width, tmpCanvas.height);
             }
@@ -3570,29 +3754,52 @@
     }
 
     // ===== Rendering =====
+    // renderCurrentPage の呼び出し世代カウンタ (同タブ内連続呼び出しのレース防止)
+    let _renderGenSeq = 0;
+
     async function renderCurrentPage() {
       if (!pdfDoc || currentPage >= pdfPages.length) return;
+      // 世代トークンを保持: render中にタブ切替/連続呼び出しがあったら描画結果を破棄
+      const myGen = loadGeneration;
+      const myTabId = activeTabId;
+      const myPdfDoc = pdfDoc;
+      const myRenderGen = ++_renderGenSeq;
       const pd = pdfPages[currentPage];
 
+      const isStale = () =>
+        myGen !== loadGeneration ||
+        myTabId !== activeTabId ||
+        myPdfDoc !== pdfDoc ||
+        myRenderGen !== _renderGenSeq;
+
       if (obiProcessed && pd.processedCanvas) {
+        if (isStale()) return;
         canvas.width = pd.processedCanvas.width;
         canvas.height = pd.processedCanvas.height;
         ctx.drawImage(pd.processedCanvas, 0, 0);
-        // 帯チェン後はテキストレイヤーを非表示（帯部分のテキストは無意味）
         clearTextLayer();
         applyFitZoom();
-        requestAnimationFrame(() => { updateWhiteBoxOverlayPosition(); updateObiOverlayPosition(); renderEditObjects(); });
+        requestAnimationFrame(() => {
+          if (isStale()) return;
+          updateWhiteBoxOverlayPosition(); updateObiOverlayPosition(); renderEditObjects();
+        });
         return;
       }
 
       const page = pd.page;
       const viewport = page.getViewport({ scale: RENDER_SCALE, rotation: getPageRotation(currentPage) });
+      if (isStale()) return;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: ctx, viewport }).promise;
+      if (isStale()) {
+        console.log('[renderCurrentPage] stale検知 → 描画破棄');
+        return;
+      }
 
       // テキストレイヤーを描画
       await renderTextLayer(page, viewport);
+      if (isStale()) return;
 
       applyFitZoom();
       obiOverlay.style.display = 'none';
@@ -3679,6 +3886,9 @@
       if (!pdfDoc) { showToast('PDFを読み込んでください'); return; }
       if (!obiImage) { showToast('帯画像が未登録です。メニュー→帯チェン→帯画像を管理で登録してください。'); return; }
 
+      // OCRエンジンを事前初期化（画像ベースPDF対応）
+      if (!ocrReady && !ocrInitializing) await initOcrWorker();
+
       const prevState = captureState();
       showLoading('帯チェン処理中...', `全${totalPages}ページを解析しています`);
       try {
@@ -3691,7 +3901,7 @@
           tc.width = viewport.width; tc.height = viewport.height;
           const tctx = tc.getContext('2d');
           await page.render({ canvasContext: tctx, viewport }).promise;
-          const region = await detectObiRegion(page, tc);
+          const region = await detectObiRegion(page, tc, getPageRotation(i));
           pd.region = region;
           pd.detected = true;
 
@@ -4659,6 +4869,53 @@ ${pagesHtml}
       selectedEditObj = null;
       renderEditObjects();
       updateMenuStates();
+    }
+
+    // === コピー/ペースト/複製 ===
+    function copySelectedObject() {
+      if (!selectedEditObj) return;
+      // ディープコピー（img要素は参照を保持）
+      clipboardObj = JSON.parse(JSON.stringify(selectedEditObj));
+      // image型のdataURLは保持されるが、imgオブジェクトは再構築が必要
+      if (selectedEditObj.type === 'image' && selectedEditObj.img) {
+        clipboardObj._hasImg = true;
+      }
+      showToast('コピーしました');
+      updateMenuStates();
+    }
+
+    function pasteObject(offsetX, offsetY) {
+      if (!clipboardObj) return;
+      pushUndo();
+      const newObj = JSON.parse(JSON.stringify(clipboardObj));
+      newObj.id = ++editObjIdCounter;
+      // ペースト位置を少しずらす（重ならないように）
+      const ox = typeof offsetX === 'number' ? offsetX : 2;
+      const oy = typeof offsetY === 'number' ? offsetY : 2;
+      newObj.xPct = Math.min(90, (newObj.xPct || 0) + ox);
+      newObj.yPct = Math.min(90, (newObj.yPct || 0) + oy);
+      // image型はimgオブジェクトを再構築
+      if (newObj.type === 'image' && (newObj._hasImg || newObj.dataURL)) {
+        delete newObj._hasImg;
+        const img = new Image();
+        img.src = newObj.dataURL;
+        newObj.img = img;
+      }
+      const objs = getPageEditObjects();
+      objs.push(newObj);
+      renderEditObjects();
+      selectEditObject(newObj);
+      updateMenuStates();
+      showToast('貼り付けました');
+    }
+
+    function duplicateSelectedObject() {
+      if (!selectedEditObj) return;
+      // 一時的にコピーして即ペースト
+      const prevClipboard = clipboardObj;
+      copySelectedObject();
+      pasteObject(3, 3);
+      clipboardObj = prevClipboard; // 元のクリップボードを復元
     }
 
     // === 編集オブジェクト DOM キャッシュ ===
@@ -6786,6 +7043,8 @@ ${pagesHtml}
 
     function switchToTab(tabId) {
       if (activeTabId === tabId) return;
+      // 世代カウンタを進める: 進行中のasync処理(initPdfDoc, autoOrientPages, render等)を全てstale化
+      loadGeneration++;
       // Save current tab state
       if (activeTabId !== null) {
         const curTab = tabs.find(t => t.id === activeTabId);
@@ -6795,6 +7054,11 @@ ${pagesHtml}
             obiImage, obiProcessed, currentFilePath,
             editObjects: JSON.parse(JSON.stringify(editObjects)),
             undoStack: [...undoStack], redoStack: [...redoStack],
+            // 複数選択状態 (タブごとに保持しないと別タブの選択状態が漏れる)
+            selectedThumbPages: [...(selectedThumbPages || [])],
+            lastClickedThumb: lastClickedThumb,
+            // ツール状態もタブごと
+            currentToolMode: currentToolMode,
           };
           // Save image refs separately
           curTab.state._editObjImages = {};
@@ -6804,6 +7068,19 @@ ${pagesHtml}
           }
         }
       }
+
+      // === 新タブに切り替える前に、グローバルの一時的な状態を全クリア ===
+      // (新タブの state がない場合や復元漏れがあっても、古いタブの状態が残らないように)
+      selectedThumbPages = new Set();
+      lastClickedThumb = -1;
+      selectedEditObj = null;
+      clipboardObj = null; // 念のため (タブ間でコピペできるかは要件次第だが安全側に倒す)
+      // 編集オブジェクトDOMもいったん全消去
+      try { clearEditObjectDom(); } catch (e) {}
+      // サムネイルリストもクリア (新タブのが描き直されるまでの間に古いものが見えないように)
+      const _thumbList = document.getElementById('thumbList');
+      if (_thumbList) _thumbList.innerHTML = '';
+
       // Load new tab state
       const newTab = tabs.find(t => t.id === tabId);
       if (!newTab) return;
@@ -6827,6 +7104,13 @@ ${pagesHtml}
         }
         undoStack.length = 0; undoStack.push(...newTab.state.undoStack);
         redoStack.length = 0; redoStack.push(...newTab.state.redoStack);
+        // 複数選択状態を復元
+        selectedThumbPages = new Set(newTab.state.selectedThumbPages || []);
+        lastClickedThumb = (typeof newTab.state.lastClickedThumb === 'number') ? newTab.state.lastClickedThumb : -1;
+        // ツール状態を復元
+        if (newTab.state.currentToolMode) {
+          try { setToolMode(newTab.state.currentToolMode); } catch (e) { currentToolMode = newTab.state.currentToolMode; }
+        }
 
         fileNameEl.textContent = newTab.name;
         document.title = 'Obi-Tool - ' + newTab.name;
@@ -6851,10 +7135,7 @@ ${pagesHtml}
         emptyState.style.display = '';
         fileNameEl.textContent = 'PDFを開いてください';
         document.title = 'Obi-Tool';
-        document.getElementById('thumbList').innerHTML = '';
       }
-      selectedEditObj = null;
-      clearEditObjectDom();
       updateMenuStates();
       updateUndoRedoMenu();
       renderTabBar();
@@ -7347,4 +7628,4 @@ ${pagesHtml}
 </body>
 
 </html>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   

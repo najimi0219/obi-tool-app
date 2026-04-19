@@ -65,6 +65,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('open-obi-image', (event, filePath) => callback(filePath));
   },
 
+  // OCR (PaddleOCR via main process)
+  ocrRecognize: (pngBase64) => ipcRenderer.invoke('ocr-recognize', pngBase64),
+  ocrInit: () => ipcRenderer.invoke('ocr-init'),
+
   // Platform detection
   isElectron: true
 });

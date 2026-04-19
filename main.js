@@ -2,8 +2,40 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron')
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const licenseManager = require('./license-manager');
 const { generateDeviceId, getDeviceName } = require('./device-id');
+
+// ===== PaddleOCR (multilingual-purejs-ocr) =====
+let ocrInstance = null;
+let ocrInitPromise = null;
+
+async function getOcrInstance() {
+  if (ocrInstance) return ocrInstance;
+  if (ocrInitPromise) return ocrInitPromise;
+  ocrInitPromise = (async () => {
+    try {
+      const Ocr = require('multilingual-purejs-ocr');
+      // maxImageSize: デフォルト960は小さすぎる（帯部分の文字が4-5pxまで縮小されOCR不能）
+      // 2560に拡大することで RENDER_SCALE=3 でレンダしたA4横ページ（2526px幅）が
+      // 縮小されずに処理され、帯文字をフル解像度（30px前後）でOCRできる
+      // detectionThreshold: デフォルト0.3は厳しめ。0.2に緩和して取りこぼし減らす
+      // confidenceThreshold: 0.4で曖昧な認識結果も拾う（後段で正規表現マッチング）
+      ocrInstance = await Ocr.create({
+        language: 'ja',
+        maxImageSize: 2560,
+        detectionThreshold: 0.2,
+        confidenceThreshold: 0.4
+      });
+      console.log('[OCR] PaddleOCR (Japanese, maxImageSize=2560) 初期化完了');
+    } catch (e) {
+      console.error('[OCR] PaddleOCR 初期化失敗:', e);
+      ocrInstance = null;
+    }
+    return ocrInstance;
+  })();
+  return ocrInitPromise;
+}
 
 // ===== セキュリティ: ファイルパス検証 =====
 function isValidFilePath(filePath) {
@@ -664,6 +696,55 @@ ipcMain.handle('update-check', async () => {
     return { success: true, version: result?.updateInfo?.version };
   } catch (e) {
     return { success: false, error: e.message };
+  }
+});
+
+// ===== OCR IPC Handlers =====
+ipcMain.handle('ocr-recognize', async (event, imgBase64) => {
+  const t0 = Date.now();
+  try {
+    const ocr = await getOcrInstance();
+    if (!ocr) {
+      console.warn('[OCR] recognize: OCR未初期化');
+      return { text: '', lines: [], error: 'OCR not initialized' };
+    }
+    if (!imgBase64 || typeof imgBase64 !== 'string' || imgBase64.length < 100) {
+      return { text: '', lines: [], error: 'invalid image' };
+    }
+
+    // 拡張子は .jpg だが PaddleOCR は内容から判定するので PNG/JPEG どちらでもOK
+    const tmpFile = path.join(os.tmpdir(), `obi-ocr-${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`);
+    const buffer = Buffer.from(imgBase64, 'base64');
+    fs.writeFileSync(tmpFile, buffer);
+    console.log(`[OCR] recognize: ${Math.round(buffer.length/1024)}KB → ${tmpFile}`);
+
+    const result = await ocr.detect(tmpFile);
+
+    try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore */ }
+
+    const lines = (result.data || []).map(item => ({
+      text: item.text || '',
+      score: item.confidence || 0,
+      frame: item.frame || null,
+      box: item.box || null
+    }));
+    const fullText = lines.map(l => l.text).join('\n');
+    const dt = Date.now() - t0;
+    console.log(`[OCR] recognize完了: ${lines.length}行, ${fullText.length}文字 (${dt}ms)`);
+
+    return { text: fullText, lines };
+  } catch (e) {
+    console.error('[OCR] recognize error:', e);
+    return { text: '', lines: [], error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-init', async () => {
+  try {
+    const ocr = await getOcrInstance();
+    return { ready: !!ocr };
+  } catch (e) {
+    return { ready: false, error: e.message };
   }
 });
 

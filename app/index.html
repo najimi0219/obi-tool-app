@@ -8,7 +8,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data:; connect-src 'self' https: blob:; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:;">
   <script src="lib/pdf.min.js"></script>
   <script src="lib/jspdf.umd.min.js"></script>
-  <script src="lib/tesseract.min.js"></script>
+  <!-- OCR: PaddleOCR via IPC (Tesseract.js removed) -->
+  <script src="lib/jsQR.js"></script>
   <script src="detect-engine.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
@@ -1054,7 +1055,7 @@
       document.getElementById('loadingText').textContent = 'PDF読み込み中...';
 
       const arrayBuffer = await file.arrayBuffer();
-      pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer, cMapUrl: 'lib/cmaps/', cMapPacked: true, standardFontDataUrl: 'lib/standard_fonts/', isEvalSupported: false }).promise;
       totalPages = pdfDoc.numPages;
       pdfPages = [];
 
@@ -1779,8 +1780,8 @@
       tmp.width = cw; tmp.height = ch;
       tmp.getContext('2d').drawImage(aiCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
       try {
-        const result = await ocrWorker.recognize(tmp);
-        const text = result.data.text || '';
+        const ocrResult = await _paddleOcrCanvas(tmp);
+        const text = (ocrResult && ocrResult.text) || '';
         let matchCount = 0;
         for (const kw of BROKER_OCR_KW) { if (text.includes(kw)) matchCount++; }
         if (PHONE_RE_OCR.test(text)) matchCount++;

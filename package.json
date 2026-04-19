@@ -1,6 +1,6 @@
 {
   "name": "obi-tool",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "マイソク業者情報削除ツール",
   "main": "main.js",
   "scripts": {
@@ -14,7 +14,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "28.3.3",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "pdfjs-dist": "^3.11.174"
   },
   "build": {
     "appId": "com.obichan.obi-tool",
@@ -28,7 +29,14 @@
       "device-id.js",
       "license-manager.js",
       "app/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "node_modules/multilingual-purejs-ocr/**/*",
+      "node_modules/onnxruntime-common/**/*",
+      "node_modules/onnxruntime-node/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**/*",
+      "node_modules/multilingual-purejs-ocr/**/*"
     ],
     "win": {
       "target": [
@@ -64,6 +72,8 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "jsqr": "^1.4.0",
+    "multilingual-purejs-ocr": "^1.0.1"
   }
 }

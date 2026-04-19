@@ -883,9 +883,7 @@ function detectMidPageBand(canvas) {
   return { found: false };
 }
 
-// ===== OCR region (browser-dependent, stubs provided) =====
-// ===== OCR関連 =====
-let ocrWorker = null;
+// ===== OCR (PaddleOCR via IPC) =====
 let ocrReady = false;
 let ocrInitializing = false;
 
@@ -893,15 +891,96 @@ async function initOcrWorker() {
   if (ocrReady || ocrInitializing) return;
   ocrInitializing = true;
   try {
-    ocrWorker = await Tesseract.createWorker('jpn', 1, {
-      logger: m => { }
-    });
-    ocrReady = true;
+    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.ocrInit) {
+      const result = await window.electronAPI.ocrInit();
+      ocrReady = !!result.ready;
+      if (ocrReady) console.log('[OCR] PaddleOCR ready via IPC');
+      else console.warn('[OCR] PaddleOCR init failed:', result.error);
+    }
   } catch (e) {
-    console.warn('OCR初期化失敗:', e);
+    console.warn('[OCR] 初期化失敗:', e);
     ocrReady = false;
   }
   ocrInitializing = false;
+}
+
+// Canvas → base64 PNG → IPC → PaddleOCR テキスト取得
+async function _paddleOcrCanvas(canvas) {
+  if (!canvas) {
+    console.warn('[OCR] _paddleOcrCanvas: canvas null');
+    return null;
+  }
+  if (!window || !window.electronAPI || !window.electronAPI.ocrRecognize) {
+    console.warn('[OCR] _paddleOcrCanvas: electronAPI.ocrRecognize 未定義');
+    return null;
+  }
+  const t0 = performance.now();
+  try {
+    // JPEG (品質0.9) でサイズ削減 → IPC高速化
+    // 大きなcanvas (5000px+) でPNG base64 にすると数十MBになりIPCが詰まる
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
+    const sizeKB = Math.round(base64.length * 0.75 / 1024);
+    console.log(`[OCR] IPC送信: canvas ${canvas.width}x${canvas.height}, JPEG ${sizeKB}KB`);
+    const result = await window.electronAPI.ocrRecognize(base64);
+    const dt = Math.round(performance.now() - t0);
+    if (!result) {
+      console.warn(`[OCR] IPC結果null (${dt}ms)`);
+      return null;
+    }
+    if (result.error) {
+      console.warn(`[OCR] エラー (${dt}ms):`, result.error);
+    } else {
+      console.log(`[OCR] OCR完了 (${dt}ms): ${(result.lines||[]).length}行, テキスト${(result.text||'').length}文字`);
+    }
+    return result;
+  } catch (e) {
+    console.warn('[OCR] _paddleOcrCanvas failed:', e);
+    return null;
+  }
+}
+
+// 共通: OCR結果からブローカーキーワードを判定
+const _OCR_BROKER_KW = ['TEL', 'FAX', 'tel', 'fax', '免許', '宅建', '取引態様',
+  '媒介', '不動産', '株式会社', '有限会社', '担当', '仲介', '専任',
+  '手数料', '物件確認', '問い合わせ', '問合せ', '営業時間',
+  '社名', '担当者', '情報提供元', '情報提供'];
+const _OCR_PHONE_RE = /\d{2,4}[-ー\s]?\d{2,4}[-ー\s]?\d{3,4}/;
+const _OCR_EMAIL_RE = /[\w.-]+@[\w.-]+/;
+
+function _analyzeOcrResult(ocrResult, canvas, cropY) {
+  if (!ocrResult || !ocrResult.text) return null;
+  const ocrText = ocrResult.text;
+
+  let matchCount = 0;
+  const matchedKeywords = [];
+  for (const kw of _OCR_BROKER_KW) {
+    if (ocrText.includes(kw)) { matchCount++; matchedKeywords.push(kw); }
+  }
+  if (_OCR_PHONE_RE.test(ocrText)) { matchCount++; matchedKeywords.push('電話番号'); }
+  if (_OCR_EMAIL_RE.test(ocrText)) { matchCount++; matchedKeywords.push('メール'); }
+
+  // PaddleOCR lines から brokerMinYPct を計算
+  let brokerMinYPct = null;
+  if (ocrResult.lines && ocrResult.lines.length > 0 && canvas) {
+    let minY = Infinity;
+    for (const line of ocrResult.lines) {
+      const lineText = line.text || '';
+      let isBrokerWord = false;
+      if (_OCR_BROKER_KW.some(kw => lineText.includes(kw))) isBrokerWord = true;
+      if (!isBrokerWord && _OCR_PHONE_RE.test(lineText)) isBrokerWord = true;
+      if (!isBrokerWord && _OCR_EMAIL_RE.test(lineText)) isBrokerWord = true;
+      if (!isBrokerWord && /株式会社|有限会社|\(株\)|（株）/.test(lineText)) isBrokerWord = true;
+      if (isBrokerWord && line.frame) {
+        const wordYInPage = (cropY || 0) + (line.frame.top || 0);
+        const wordYPct = (wordYInPage / canvas.height) * 100;
+        if (wordYPct < minY) minY = wordYPct;
+      }
+    }
+    if (minY < Infinity) brokerMinYPct = minY;
+  }
+
+  return { text: ocrText, hasBrokerInfo: matchCount >= 2, matchCount, matchedKeywords, brokerMinYPct };
 }
 
 async function ocrRegion(canvas, topPct, bottomPct) {
@@ -920,49 +999,10 @@ async function ocrRegion(canvas, topPct, bottomPct) {
   tmpCtx.drawImage(canvas, 0, cropY, canvas.width, cropH, 0, 0, canvas.width, cropH);
 
   try {
-    const result = await ocrWorker.recognize(tmpCanvas);
-    const ocrText = result.data.text || '';
-
-    const brokerKeywords = ['TEL', 'FAX', 'tel', 'fax', '免許', '宅建', '取引態様',
-      '媒介', '不動産', '株式会社', '有限会社', '担当', '仲介', '専任',
-      '手数料', '物件確認', '問い合わせ', '問合せ', '営業時間',
-      '社名', '担当者', '情報提供元', '情報提供'];
-    const phoneRe = /\d{2,4}[-ー\s]?\d{2,4}[-ー\s]?\d{3,4}/;
-    const emailRe = /[\w.-]+@[\w.-]+/;
-
-    let matchCount = 0;
-    const matchedKeywords = [];
-    for (const kw of brokerKeywords) {
-      if (ocrText.includes(kw)) { matchCount++; matchedKeywords.push(kw); }
-    }
-    if (phoneRe.test(ocrText)) { matchCount++; matchedKeywords.push('電話番号'); }
-    if (emailRe.test(ocrText)) { matchCount++; matchedKeywords.push('メール'); }
-
-    let brokerMinYPct = null;
-    try {
-      const words = result.data.words || [];
-      if (words.length > 0) {
-        let minY = Infinity;
-        for (const word of words) {
-          const wText = word.text || '';
-          let isBrokerWord = false;
-          if (brokerKeywords.some(kw => wText.includes(kw))) isBrokerWord = true;
-          if (!isBrokerWord && phoneRe.test(wText)) isBrokerWord = true;
-          if (!isBrokerWord && emailRe.test(wText)) isBrokerWord = true;
-          if (!isBrokerWord && /株式会社|有限会社|\(株\)|（株）/.test(wText)) isBrokerWord = true;
-          if (isBrokerWord && word.bbox) {
-            const wordYInPage = cropY + word.bbox.y0;
-            const wordYPct = (wordYInPage / canvas.height) * 100;
-            if (wordYPct < minY) minY = wordYPct;
-          }
-        }
-        if (minY < Infinity) brokerMinYPct = minY;
-      }
-    } catch (e) { }
-
-    return { text: ocrText, hasBrokerInfo: matchCount >= 2, matchCount, matchedKeywords, brokerMinYPct };
+    const ocrResult = await _paddleOcrCanvas(tmpCanvas);
+    return _analyzeOcrResult(ocrResult, canvas, cropY);
   } catch (e) {
-    console.warn('OCR失敗:', e);
+    console.warn('[OCR] ocrRegion failed:', e);
     return null;
   }
 }
@@ -982,50 +1022,90 @@ async function ocrLowerRegion(canvas, topPct) {
   tmpCtx.drawImage(canvas, 0, cropY, canvas.width, cropH, 0, 0, canvas.width, cropH);
 
   try {
-    const result = await ocrWorker.recognize(tmpCanvas);
-    const ocrText = result.data.text || '';
-
-    const brokerKeywords = ['TEL', 'FAX', 'tel', 'fax', '免許', '宅建', '取引態様',
-      '媒介', '不動産', '株式会社', '有限会社', '担当', '仲介', '専任',
-      '手数料', '物件確認', '問い合わせ', '問合せ', '営業時間',
-      '社名', '担当者', '情報提供元', '情報提供'];
-    const phoneRe = /\d{2,4}[-ー\s]?\d{2,4}[-ー\s]?\d{3,4}/;
-    const emailRe = /[\w.-]+@[\w.-]+/;
-
-    let matchCount = 0;
-    const matchedKeywords = [];
-    for (const kw of brokerKeywords) {
-      if (ocrText.includes(kw)) { matchCount++; matchedKeywords.push(kw); }
-    }
-    if (phoneRe.test(ocrText)) { matchCount++; matchedKeywords.push('電話番号'); }
-    if (emailRe.test(ocrText)) { matchCount++; matchedKeywords.push('メール'); }
-
-    let brokerMinYPct = null;
-    try {
-      const words = result.data.words || [];
-      if (words.length > 0) {
-        let minY = Infinity;
-        for (const word of words) {
-          const wText = word.text || '';
-          let isBrokerWord = false;
-          if (brokerKeywords.some(kw => wText.includes(kw))) isBrokerWord = true;
-          if (!isBrokerWord && phoneRe.test(wText)) isBrokerWord = true;
-          if (!isBrokerWord && emailRe.test(wText)) isBrokerWord = true;
-          if (!isBrokerWord && /株式会社|有限会社|\(株\)|（株）/.test(wText)) isBrokerWord = true;
-          if (isBrokerWord && word.bbox) {
-            const wordYInPage = cropY + word.bbox.y0;
-            const wordYPct = (wordYInPage / canvas.height) * 100;
-            if (wordYPct < minY) minY = wordYPct;
-          }
-        }
-        if (minY < Infinity) brokerMinYPct = minY;
-      }
-    } catch (e) { }
-
-    return { text: ocrText, hasBrokerInfo: matchCount >= 2, matchCount, matchedKeywords, brokerMinYPct };
+    const ocrResult = await _paddleOcrCanvas(tmpCanvas);
+    return _analyzeOcrResult(ocrResult, canvas, cropY);
   } catch (e) {
-    console.warn('OCR失敗:', e);
+    console.warn('[OCR] ocrLowerRegion failed:', e);
     return null;
+  }
+}
+
+// ===== QRコード検出 (jsQR) =====
+// canvasからQRコードを検出し、位置情報を返す
+function detectQRCodes(canvas) {
+  if (!canvas || typeof jsQR === 'undefined') return { found: false, codes: [] };
+
+  try {
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const codes = [];
+
+    // フルページスキャン
+    const result = jsQR(imgData.data, imgData.width, imgData.height, {
+      inversionAttempts: 'attemptBoth'
+    });
+
+    if (result && result.location) {
+      const loc = result.location;
+      const topY = Math.min(loc.topLeftCorner.y, loc.topRightCorner.y);
+      const bottomY = Math.max(loc.bottomLeftCorner.y, loc.bottomRightCorner.y);
+      const leftX = Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x);
+      const rightX = Math.max(loc.topRightCorner.x, loc.bottomRightCorner.x);
+
+      codes.push({
+        data: result.data,
+        topPct: (topY / canvas.height) * 100,
+        bottomPct: (bottomY / canvas.height) * 100,
+        leftPct: (leftX / canvas.width) * 100,
+        rightPct: (rightX / canvas.width) * 100,
+        centerYPct: ((topY + bottomY) / 2 / canvas.height) * 100,
+        sizePct: ((bottomY - topY) / canvas.height) * 100
+      });
+    }
+
+    // QRが下半分に無い場合、下部領域だけ再スキャン（解像度向上）
+    if (codes.length === 0) {
+      const halfY = Math.floor(canvas.height * 0.5);
+      const cropH = canvas.height - halfY;
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = canvas.width;
+      tmpCanvas.height = cropH;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.drawImage(canvas, 0, halfY, canvas.width, cropH, 0, 0, canvas.width, cropH);
+
+      const cropData = tmpCtx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
+      const cropResult = jsQR(cropData.data, cropData.width, cropData.height, {
+        inversionAttempts: 'attemptBoth'
+      });
+
+      if (cropResult && cropResult.location) {
+        const loc = cropResult.location;
+        const topY = Math.min(loc.topLeftCorner.y, loc.topRightCorner.y);
+        const bottomY = Math.max(loc.bottomLeftCorner.y, loc.bottomRightCorner.y);
+        const leftX = Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x);
+        const rightX = Math.max(loc.topRightCorner.x, loc.bottomRightCorner.x);
+
+        codes.push({
+          data: cropResult.data,
+          topPct: ((halfY + topY) / canvas.height) * 100,
+          bottomPct: ((halfY + bottomY) / canvas.height) * 100,
+          leftPct: (leftX / canvas.width) * 100,
+          rightPct: (rightX / canvas.width) * 100,
+          centerYPct: ((halfY + (topY + bottomY) / 2) / canvas.height) * 100,
+          sizePct: ((bottomY - topY) / canvas.height) * 100
+        });
+      }
+    }
+
+    if (codes.length > 0) {
+      console.log(`[QR] ${codes.length}個のQRコード検出: ${codes.map(c => c.data.substring(0, 40)).join(', ')}`);
+      console.log(`[QR] 位置: Y=${codes[0].topPct.toFixed(1)}%~${codes[0].bottomPct.toFixed(1)}%`);
+    }
+
+    return { found: codes.length > 0, codes };
+  } catch (e) {
+    console.warn('[QR] detectQRCodes failed:', e);
+    return { found: false, codes: [] };
   }
 }
 
@@ -1398,353 +1478,701 @@ function findBrokerLine(hLines, brokerTextItems) {
   return candidates[0];
 }
 
-// ===== Main integrated detection function =====
-async function detectObiRegion(page, renderedCanvas) {
-  const viewport = page.getViewport({ scale: 1 });
-  const pageH = viewport.height;
-  const pageW = viewport.width;
+// =============================================
+// ===== V2: Item-Based Detection Flow =====
+// =============================================
+// ① テキスト/画像ページ判定 → ② OCRテキスト化 → ③ 業者アイテム抽出
+// → ④ QRコード検出 → ⑤ 矩形囲み → ⑥ 帯タイプ分類
+// → ⑦ 削除領域決定 → ⑧ 保護アイテム除外 → ⑨⑩ 消去＆貼付
 
-  const text = await detectObiByText(page);
-  const logos = await detectTextLogos(page);
-  const images = await detectObiImages(page);
-  const pixel = detectObiByPixels(renderedCanvas);
+// --- 業者情報パターン ---
+const BROKER_ITEM_PATTERNS = {
+  phone:       { re: /\d{2,4}[-ー−‐\s]?\d{2,4}[-ー−‐\s]?\d{3,4}/, label: '電話番号', weight: 3 },
+  email:       { re: /[\w.\-]+@[\w.\-]+\.\w+/, label: 'メアド', weight: 3 },
+  company:     { re: /株式会社|有限会社|\(株\)|（株）|合同会社/, label: '会社名', weight: 3 },
+  license:     { re: /免許|宅建|宅地建物|国土交通大臣|知事\s*[\(（]/, label: '宅建番号', weight: 4 },
+  transaction: { re: /取引態様|媒介|仲介|専任|一般媒介|専属専任/, label: '取引態様', weight: 4 },
+  commission:  { re: /手数料/, label: '手数料', weight: 3 },
+  contact:     { re: /担当[者：:\s]|お問い?合わせ|問合せ|物件確認/, label: '担当', weight: 3 },
+  fax:         { re: /FAX|fax|ファックス|ＦＡＸ/, label: 'FAX', weight: 3 },
+  tel:         { re: /TEL|tel|ＴＥＬ|電話番号/, label: 'TEL', weight: 2 },
+  url:         { re: /https?:\/\/|www\./, label: 'URL', weight: 2 },
+  broker_name: { re: /不動産|ホーム|ハウス|リアル|エステート|プロパティ|建設|開発/, label: '業者名', weight: 2 }
+};
 
-  let obiType = 'none';
-  let brokerTextItems = [];
-  let allTextItems = [];
+// --- 保護アイテムキーワード（消してはいけない） ---
+const PROTECTED_KW = [
+  // 周辺情報・ライフインフォメーション
+  '小学校', '中学校', '高等学校', '高校', '幼稚園', '保育園', '保育所',
+  '最寄', '徒歩', 'バス停', 'バス ',
+  'コンビニ', 'スーパー', '病院', '薬局', '公園', '郵便局',
+  '図書館', '銀行', '交番', '警察', '消防署',
+  'ライフインフォメーション', '周辺環境', '周辺施設', '生活施設', '生活関連',
+  // 物件情報
+  '間取', 'LDK', 'DK', '1R', '1K',
+  '専有面積', '建物面積', '土地面積', '敷地面積',
+  '築年', '構造', '階建', '所在地',
+  '管理費', '修繕積立', '駐車場', '総戸数',
+  '賃料', '価格', '礼金', '敷金', '保証金',
+  '設備', '入居', '契約期間',
+  // 写真関連ラベル
+  '外観', '内観', '現地', '室内', '眺望', 'バルコニー', 'エントランス',
+  '物件概要', '概要'
+];
 
-  const tc = await page.getTextContent();
-  for (const item of tc.items) {
-    if (!item.str || item.str.trim().length === 0) continue;
-    const fontSize = Math.abs(item.transform[3]) || Math.abs(item.transform[0]) || 10;
-    const yFromTop = pageH - item.transform[5];
-    const yPct = (yFromTop / pageH) * 100;
-    const xPct = (item.transform[4] / pageW) * 100;
-    allTextItems.push({ str: item.str, text: item.str, yPct, xPct, fontSize });
-  }
+// Step 2: ページ全体の画像情報を取得（位置・サイズ）
+async function getAllPageImages(page) {
+  try {
+    const ops = await page.getOperatorList();
+    const vp = page.getViewport({ scale: 1 });
+    const pageH = vp.height;
+    const pageW = vp.width;
+    const images = [];
 
-  if (text.found) {
-    obiType = text.topPct >= 75 ? 'normal' : 'irregular';
-
-    if (text.fingerprint) {
-      for (const item of allTextItems) {
-        if (item.yPct >= text.topPct - 3) {
-          const matchReason = isBrokerMatch(item.str, text.fingerprint);
-          if (matchReason) {
-            brokerTextItems.push({ text: item.str, yPct: item.yPct, xPct: item.xPct, fontSize: item.fontSize, reason: matchReason });
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      if (ops.fnArray[i] === 85) { // paintImageXObject
+        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+          if (ops.fnArray[j] === 12) { // transform
+            const a = ops.argsArray[j];
+            if (a && a.length >= 6) {
+              const imgW = Math.abs(a[0]);
+              const imgH = Math.abs(a[3]);
+              const imgX = a[4];
+              const imgY = a[5];
+              const yFromTop = pageH - imgY;
+              images.push({
+                yPct: (yFromTop / pageH) * 100,
+                xPct: (imgX / pageW) * 100,
+                hPct: (imgH / pageH) * 100,
+                wPct: (imgW / pageW) * 100,
+                bottomPct: ((yFromTop + imgH) / pageH) * 100,
+                rightPct: ((imgX + imgW) / pageW) * 100,
+                area: (imgH / pageH) * (imgW / pageW) * 10000 // %²
+              });
+            }
+            break;
           }
         }
       }
     }
+    return images;
+  } catch (e) {
+    console.warn('[V2] getAllPageImages failed:', e);
+    return [];
   }
+}
 
-  const paths = await detectPathElements(page);
+// Step 2: 画像ページのOCR → 仮想テキストアイテム変換
+// 画像ベースページでは2段階OCRを実行：
+//   ① 全体OCR（縮小される） → ページ上部のテキスト用
+//   ② 下部60%のクロップOCR（高解像度維持） → 帯部分の精密OCR
+async function ocrToTextItems(canvas) {
+  if (!canvas) return [];
 
-  if (paths.hLines.length === 0 && renderedCanvas) {
-    const pixelLines = detectPixelHLines(renderedCanvas);
-    if (pixelLines.length > 0) {
-      paths.hLines.push(...pixelLines);
+  console.log(`[V2] ocrToTextItems: canvas ${canvas.width}x${canvas.height} で全体+帯領域の2段階OCR実行`);
+
+  // ① 全体OCR（PaddleOCRが内部で縮小する）
+  const fullResult = await _paddleOcrCanvas(canvas);
+  const fullLines = (fullResult && fullResult.lines) ? fullResult.lines : [];
+  console.log(`[V2] ① 全体OCR: ${fullLines.length}行`);
+
+  // ② 下部60%を高解像度のままクロップしてOCR（帯文字精度UP）
+  const cropTopPct = 40; // 下60%
+  const cropY = Math.floor(canvas.height * cropTopPct / 100);
+  const cropH = canvas.height - cropY;
+  let bottomLines = [];
+  let bottomCropOffset = cropY;
+
+  if (cropH >= 100) {
+    try {
+      const bottomCanvas = document.createElement('canvas');
+      bottomCanvas.width = canvas.width;
+      bottomCanvas.height = cropH;
+      const bctx = bottomCanvas.getContext('2d');
+      bctx.drawImage(canvas, 0, cropY, canvas.width, cropH, 0, 0, canvas.width, cropH);
+      const bottomResult = await _paddleOcrCanvas(bottomCanvas);
+      if (bottomResult && bottomResult.lines) {
+        bottomLines = bottomResult.lines;
+        console.log(`[V2] ② 下部クロップOCR (${canvas.width}x${cropH}): ${bottomLines.length}行`);
+      }
+    } catch (e) {
+      console.warn('[V2] 下部クロップOCR失敗:', e);
     }
   }
 
-  if (paths.rects.length === 0 && renderedCanvas && paths.hLines.length >= 2) {
-    const pixelBoxes = detectPixelBoxes(renderedCanvas, paths.hLines);
-    if (pixelBoxes.length > 0) {
-      paths.rects.push(...pixelBoxes);
-    }
+  // 結果を統合: 上部60%は fullLines、下部40%は bottomLines を優先
+  const items = [];
+  const seenTexts = new Set(); // 重複排除用
+
+  // 下部クロップ結果を先に追加（高解像度なので優先）
+  for (const line of bottomLines) {
+    if (!line.text) continue;
+    const f = line.frame;
+    if (!f || typeof f.top !== 'number') continue;
+    const topY = bottomCropOffset + f.top;
+    const bottomY = bottomCropOffset + f.top + f.height;
+    const leftX = f.left;
+    const rightX = f.left + f.width;
+    const key = `${line.text}@${Math.floor(topY/10)}`;
+    if (seenTexts.has(key)) continue;
+    seenTexts.add(key);
+    items.push({
+      text: line.text,
+      yPct: (topY / canvas.height) * 100,
+      xPct: (leftX / canvas.width) * 100,
+      bottomPct: (bottomY / canvas.height) * 100,
+      widthPct: ((rightX - leftX) / canvas.width) * 100,
+      heightPct: ((bottomY - topY) / canvas.height) * 100,
+      fontSize: bottomY - topY,
+      source: 'ocr_bottom',
+      confidence: line.score || 0
+    });
   }
 
-  let brokerBox = null;
-  let brokerLine = null;
-  let clearRegion = null;
+  // 全体OCR結果を追加（上部のテキスト用）
+  for (const line of fullLines) {
+    if (!line.text) continue;
+    const f = line.frame;
+    if (!f || typeof f.top !== 'number') continue;
+    const topY = f.top;
+    const bottomY = f.top + f.height;
+    const leftX = f.left;
+    const rightX = f.left + f.width;
+    const yPct = (topY / canvas.height) * 100;
+    // 下部60%は bottomLines 優先、上部40%のみ採用
+    if (yPct >= cropTopPct - 5) continue;
+    const key = `${line.text}@${Math.floor(topY/10)}`;
+    if (seenTexts.has(key)) continue;
+    seenTexts.add(key);
+    items.push({
+      text: line.text,
+      yPct,
+      xPct: (leftX / canvas.width) * 100,
+      bottomPct: (bottomY / canvas.height) * 100,
+      widthPct: ((rightX - leftX) / canvas.width) * 100,
+      heightPct: ((bottomY - topY) / canvas.height) * 100,
+      fontSize: bottomY - topY,
+      source: 'ocr_full',
+      confidence: line.score || 0
+    });
+  }
 
-  brokerBox = findBrokerBox(paths.rects, brokerTextItems, allTextItems, text);
+  console.log(`[V2] ocrToTextItems: 統合結果 ${items.length}件 (下部優先)`);
+  if (items.length > 0) {
+    const sample = items.slice(0, 5).map(i => `"${i.text.substring(0, 15)}"@Y${i.yPct.toFixed(0)}%`).join(', ');
+    console.log(`[V2] OCRサンプル: ${sample}`);
+  }
+  return items;
+}
 
-  if (brokerBox) {
-    let boxTopPct = brokerBox.yPct;
-    let boxBottomPct = brokerBox.bottomPct;
+// Step 3: 業者アイテム抽出
+// ページ上部（Y < 65%）にある単独マッチは物件詳細テーブルの誤検出が多いので
+// 重みを下げるか除外する。これにより帯の矩形が不必要に広がるのを防ぐ。
+function extractBrokerItems(textItems) {
+  const items = [];
+  // 上部の単独マッチで誤検出しやすいパターン
+  // 「取引態様」は物件概要表のラベルとして頻出、broker_name系ワードも物件説明に出る
+  const UPPER_WEAK_TYPES = new Set(['transaction', 'broker_name', 'phone', 'tel', 'url']);
 
-    if (brokerBox.hPct > 15 && brokerTextItems.length > 0) {
-      const brokerInBox = brokerTextItems.filter(t =>
-        t.yPct >= brokerBox.yPct - 2 && t.yPct <= brokerBox.bottomPct + 2);
-      if (brokerInBox.length > 0) {
-        const minBrokerY = Math.min(...brokerInBox.map(t => t.yPct));
-        boxTopPct = Math.max(brokerBox.yPct, minBrokerY - 3);
+  for (const ti of textItems) {
+    const types = [];
+    let totalWeight = 0;
+    for (const [type, { re, weight }] of Object.entries(BROKER_ITEM_PATTERNS)) {
+      if (re.test(ti.text)) {
+        types.push(type);
+        totalWeight += weight;
       }
     }
+    if (types.length === 0) continue;
 
-    const isPartialBox = brokerBox.wPct < 80;
-
-    if (isPartialBox) {
-      if (text.found && brokerTextItems.length > 0) {
-        const altLine = findBrokerLine(paths.hLines, brokerTextItems);
-        if (altLine && altLine.yPct > boxTopPct) {
-          brokerLine = altLine;
-          brokerBox = null;
-          if (obiType === 'normal') {
-            clearRegion = {
-              detected: true, method: 'line',
-              clearTopPct: altLine.yPct, clearBottomPct: 100,
-              clearLeftPct: 0, clearRightPct: 100,
-              isFullWidth: true, line: altLine
-            };
-          } else {
-            clearRegion = {
-              detected: true, method: 'line_irregular',
-              clearTopPct: altLine.yPct,
-              clearBottomPct: Math.min(100, Math.max(...brokerTextItems.map(t => t.yPct)) + 4),
-              clearLeftPct: altLine.xStartPct, clearRightPct: altLine.xEndPct,
-              isFullWidth: altLine.widthPct >= 90, line: altLine
-            };
-          }
-        } else if (altLine && altLine.widthPct >= 50) {
-          brokerLine = altLine;
-          brokerBox = null;
-          clearRegion = {
-            detected: true, method: 'line',
-            clearTopPct: altLine.yPct, clearBottomPct: 100,
-            clearLeftPct: 0, clearRightPct: 100,
-            isFullWidth: altLine.widthPct >= 90, line: altLine
-          };
-        } else {
-          if (text.topPct > boxTopPct + 5) {
-            brokerBox = null;
-          } else if (brokerBox.wPct < 60) {
-            brokerBox = null;
-          }
-        }
-      } else if (brokerBox.wPct < 60) {
-        brokerBox = null;
-      }
+    // ページ上部（Y < 65%）にある単独マッチは信頼度が低い
+    // 複数タイプ同時マッチ or 高weight（免許番号等）は信頼できるのでそのまま
+    if (ti.yPct < 65 && types.length === 1 && UPPER_WEAK_TYPES.has(types[0])) {
+      // 上部の弱い単独マッチは除外（物件情報テーブルの誤検出が多い）
+      continue;
     }
 
-    if (brokerBox && !clearRegion) {
-      clearRegion = {
-        detected: true,
-        method: obiType === 'normal' ? 'box' : (obiType === 'irregular' ? 'box_irregular' : 'box'),
-        clearTopPct: boxTopPct,
-        clearBottomPct: boxBottomPct,
-        clearLeftPct: brokerBox.xPct,
-        clearRightPct: brokerBox.xPct + brokerBox.wPct,
-        isFullWidth: brokerBox.wPct >= 90,
-        box: brokerBox
-      };
+    items.push({ ...ti, brokerTypes: types, weight: totalWeight });
+  }
+  return items;
+}
+
+// Step 3.5: 業者アイテムのクラスタリング（外れ値除去）
+// Y座標でソートし、大きなギャップで分割 → 最重クラスタを帯として採用
+const CLUSTER_GAP_PCT = 15; // 15%以上のギャップでクラスタ分割
+
+function clusterBrokerItems(brokerItems, qrCodes) {
+  if (brokerItems.length === 0) return { mainItems: [], outliers: [], clusterY: null };
+
+  // Y座標でソート
+  const sorted = [...brokerItems].sort((a, b) => a.yPct - b.yPct);
+
+  // QRコードのY座標も考慮（クラスタ判定用）
+  const allYs = [
+    ...sorted.map(item => ({ yPct: item.yPct, weight: item.weight || 1, type: 'broker' })),
+    ...qrCodes.map(qr => ({ yPct: qr.topPct, weight: 3, type: 'qr' }))
+  ].sort((a, b) => a.yPct - b.yPct);
+
+  if (allYs.length <= 1) return { mainItems: brokerItems, outliers: [], clusterY: null };
+
+  // ギャップ検出 → クラスタに分割
+  const clusters = [[]];
+  clusters[0].push(allYs[0]);
+  for (let i = 1; i < allYs.length; i++) {
+    const gap = allYs[i].yPct - allYs[i - 1].yPct;
+    if (gap >= CLUSTER_GAP_PCT) {
+      clusters.push([]);
+    }
+    clusters[clusters.length - 1].push(allYs[i]);
+  }
+
+  if (clusters.length <= 1) {
+    // ギャップなし → 全てが同一クラスタ
+    return { mainItems: brokerItems, outliers: [], clusterY: null };
+  }
+
+  // 各クラスタのスコア（アイテム数 × 平均weight）を計算
+  let bestIdx = 0;
+  let bestScore = 0;
+  for (let i = 0; i < clusters.length; i++) {
+    const totalWeight = clusters[i].reduce((s, item) => s + item.weight, 0);
+    const score = totalWeight * clusters[i].length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
     }
   }
 
-  if (!clearRegion && text.found && brokerTextItems.length > 0) {
-    brokerLine = findBrokerLine(paths.hLines, brokerTextItems);
+  // メインクラスタのY範囲を取得
+  const mainCluster = clusters[bestIdx];
+  const clusterMinY = mainCluster[0].yPct - 3; // 少しマージン
+  const clusterMaxY = mainCluster[mainCluster.length - 1].yPct + 3;
 
-    if (brokerLine && brokerLine.yPct < 66) {
-      brokerLine = null;
-    }
+  // 業者アイテムをメインクラスタ内/外に分類
+  const mainItems = brokerItems.filter(item =>
+    item.yPct >= clusterMinY && item.yPct <= clusterMaxY
+  );
+  const outliers = brokerItems.filter(item =>
+    item.yPct < clusterMinY || item.yPct > clusterMaxY
+  );
 
-    if (brokerLine) {
-      if (obiType === 'normal') {
-        clearRegion = {
-          detected: true,
-          method: 'line',
-          clearTopPct: brokerLine.yPct,
-          clearBottomPct: 100,
-          clearLeftPct: 0,
-          clearRightPct: 100,
-          isFullWidth: true,
-          line: brokerLine
-        };
-      } else {
-        clearRegion = {
-          detected: true,
-          method: 'line_irregular',
-          clearTopPct: brokerLine.yPct,
-          clearBottomPct: Math.min(100, Math.max(...brokerTextItems.map(t => t.yPct)) + 4),
-          clearLeftPct: brokerLine.xStartPct,
-          clearRightPct: brokerLine.xEndPct,
-          isFullWidth: brokerLine.widthPct >= 90,
-          line: brokerLine
-        };
-      }
-    }
+  if (outliers.length > 0) {
+    console.log(`[V2] ③.5 クラスタリング: ${clusters.length}クラスタ検出, ` +
+      `メイン(Y=${clusterMinY.toFixed(1)}%~${clusterMaxY.toFixed(1)}%): ${mainItems.length}件, ` +
+      `外れ値: ${outliers.length}件 → ${outliers.map(o => `"${o.text.substring(0, 15)}" Y=${o.yPct.toFixed(1)}%`).join(', ')}`);
+  }
 
-    if (!clearRegion && text.clusterScore >= 10 && text.topPct >= 70) {
-      clearRegion = {
-        detected: true,
-        method: 'text_cluster',
-        clearTopPct: Math.max(55, text.topPct - 1.5),
-        clearBottomPct: text.botPct ? Math.min(100, text.botPct + 1.0) : 100,
+  return {
+    mainItems,
+    outliers,
+    clusterY: { minPct: clusterMinY, maxPct: clusterMaxY },
+    clusterCount: clusters.length
+  };
+}
+
+// Step 5: 業者アイテム群 + QRコードから矩形を算出
+function getBrokerBoundingRect(brokerItems, qrCodes) {
+  if (brokerItems.length === 0 && qrCodes.length === 0) return null;
+
+  let minY = Infinity, maxY = -Infinity;
+  let minX = Infinity, maxX = -Infinity;
+
+  for (const item of brokerItems) {
+    minY = Math.min(minY, item.yPct);
+    maxY = Math.max(maxY, item.bottomPct || (item.yPct + (item.heightPct || 2)));
+    minX = Math.min(minX, item.xPct);
+    maxX = Math.max(maxX, item.xPct + (item.widthPct || 10));
+  }
+  for (const qr of qrCodes) {
+    minY = Math.min(minY, qr.topPct);
+    maxY = Math.max(maxY, qr.bottomPct);
+    minX = Math.min(minX, qr.leftPct);
+    maxX = Math.max(maxX, qr.rightPct);
+  }
+
+  return {
+    topPct: minY, bottomPct: Math.min(maxY, 100),
+    leftPct: Math.max(minX, 0), rightPct: Math.min(maxX, 100),
+    heightPct: Math.min(maxY, 100) - minY,
+    widthPct: Math.min(maxX, 100) - Math.max(minX, 0)
+  };
+}
+
+// Step 6: 帯タイプ分類
+function classifyBandType(rect, brokerItems) {
+  // 業者アイテムのY座標分布を分析
+  const yValues = brokerItems.map(i => i.yPct);
+  const avgY = yValues.reduce((s, v) => s + v, 0) / yValues.length;
+
+  // 下段帯: アイテムの大部分がページ下部に集中
+  // 帯の高さが過大（35%超）なら散在扱い（誤検出で矩形が広がっている可能性）
+  if (rect.heightPct > 35) return 'irregular';
+  if (rect.topPct >= 65 || (avgY >= 78 && rect.topPct >= 60)) return 'bottom';
+
+  // 中段帯: アイテムがページ中間部に集中
+  if (rect.topPct >= 25 && rect.bottomPct <= 80 && rect.heightPct <= 35) return 'middle';
+
+  // 上部にも下部にも散在 or 大きい範囲 → 変形帯
+  return 'irregular';
+}
+
+// Step 7: 帯タイプに応じた削除領域決定
+function determineClearRegion(bandType, rect) {
+  switch (bandType) {
+    case 'bottom':
+      // 帯の上端にわずかなマージンを追加するが、65%より上には行かない
+      // これにより物件情報テーブルへの食い込みを防ぐ
+      return {
+        method: 'v2_bottom',
+        clearTopPct: Math.max(65, rect.topPct - 1.5),
+        clearBottomPct: 100,
         clearLeftPct: 0,
         clearRightPct: 100,
         isFullWidth: true
       };
+    case 'middle':
+      // 左上段と右下段の範囲の高さ方向で、横幅全体を囲む
+      return {
+        method: 'v2_middle',
+        clearTopPct: Math.max(15, rect.topPct - 2),
+        clearBottomPct: Math.min(100, rect.bottomPct + 2),
+        clearLeftPct: 0,
+        clearRightPct: 100,
+        isFullWidth: true
+      };
+    case 'irregular':
+      // 左上段と右下段の範囲だけ囲む
+      return {
+        method: 'v2_irregular',
+        clearTopPct: Math.max(0, rect.topPct - 2),
+        clearBottomPct: Math.min(100, rect.bottomPct + 2),
+        clearLeftPct: Math.max(0, rect.leftPct - 3),
+        clearRightPct: Math.min(100, rect.rightPct + 3),
+        isFullWidth: rect.widthPct >= 85
+      };
+  }
+}
+
+// Step 8: 保護アイテム検出 & 削除領域の調整
+function isProtectedText(text) {
+  return PROTECTED_KW.some(kw => text.includes(kw));
+}
+
+function adjustForProtectedItems(clearRegion, textItems, pageImages, brokerItems) {
+  // --- テキスト系の保護アイテムを抽出 ---
+  const protectedTexts = textItems.filter(item => {
+    // 削除領域内かチェック
+    if (item.yPct < clearRegion.clearTopPct - 1 || item.yPct > clearRegion.clearBottomPct + 1) return false;
+    if (!clearRegion.isFullWidth) {
+      if (item.xPct < clearRegion.clearLeftPct - 2 || item.xPct > clearRegion.clearRightPct + 2) return false;
+    }
+    // 業者アイテムでなく、保護キーワードに該当するか
+    const isBroker = brokerItems.some(b => b.text === item.text && Math.abs(b.yPct - item.yPct) < 1);
+    if (isBroker) return false;
+    return isProtectedText(item.text);
+  });
+
+  // --- 画像系の保護アイテム（大きい画像 = 写真・間取り図）---
+  const protectedImages = pageImages.filter(img => {
+    // 削除領域内かチェック
+    const imgCenterY = img.yPct + img.hPct / 2;
+    if (imgCenterY < clearRegion.clearTopPct || imgCenterY > clearRegion.clearBottomPct) return false;
+    // 大きい画像は物件写真・間取り図の可能性が高い（小さいのはロゴ）
+    return img.hPct > 8 && img.wPct > 12;
+  });
+
+  const allProtected = [
+    ...protectedTexts.map(t => ({ yPct: t.yPct, bottomPct: t.bottomPct || t.yPct + 2, type: 'text', text: t.text })),
+    ...protectedImages.map(i => ({ yPct: i.yPct, bottomPct: i.bottomPct, type: 'image' }))
+  ];
+
+  if (allProtected.length === 0) {
+    console.log('[V2] ⑧ 保護アイテムなし → 調整不要');
+    return clearRegion;
+  }
+
+  console.log(`[V2] ⑧ 保護アイテム ${allProtected.length}件検出:`,
+    allProtected.map(p => `${p.type}(Y=${p.yPct.toFixed(1)}%${p.text ? ': ' + p.text.substring(0, 15) : ''})`).join(', '));
+
+  // 保護アイテムの位置を分析
+  const protMinY = Math.min(...allProtected.map(p => p.yPct));
+  const protMaxY = Math.max(...allProtected.map(p => p.bottomPct));
+
+  // 業者アイテムの位置
+  const brokerMinY = Math.min(...brokerItems.map(b => b.yPct));
+  const brokerMaxY = Math.max(...brokerItems.map(b => b.bottomPct || b.yPct + 2));
+
+  // ケース1: 保護アイテムが削除領域の上部にある → 上端を下げる
+  if (protMinY < brokerMinY && protMaxY < brokerMinY + 5) {
+    const newTop = Math.max(protMaxY + 1, brokerMinY - 2);
+    console.log(`[V2] ⑧ 上部保護 → 上端調整: ${clearRegion.clearTopPct.toFixed(1)}% → ${newTop.toFixed(1)}%`);
+    clearRegion.clearTopPct = newTop;
+    clearRegion.method += '+prot_adj_top';
+  }
+  // ケース2: 保護アイテムが削除領域の下部にある → 下端を上げる
+  else if (protMinY > brokerMaxY - 5 && protMinY > clearRegion.clearTopPct + 5) {
+    const newBottom = Math.min(protMinY - 1, brokerMaxY + 2);
+    console.log(`[V2] ⑧ 下部保護 → 下端調整: ${clearRegion.clearBottomPct.toFixed(1)}% → ${newBottom.toFixed(1)}%`);
+    clearRegion.clearBottomPct = newBottom;
+    clearRegion.method += '+prot_adj_bot';
+  }
+  // ケース3: 保護アイテムが中間に混在 → 業者アイテム個別消去モードを推奨
+  else {
+    console.warn('[V2] ⑧ 保護アイテムが業者情報と混在 → 個別消去推奨');
+    clearRegion.hasProtectedConflict = true;
+    clearRegion.protectedItems = allProtected;
+    clearRegion.method += '+prot_conflict';
+  }
+
+  return clearRegion;
+}
+
+// ===== detectObiRegion: V2 統合フロー =====
+// userRotation: ユーザーが手動で回転させた角度 (0/90/180/270)
+//   レンダリング時は (PDF nativeRotation + userRotation) が適用されるため、
+//   テキスト座標も同じ最終回転を反映する必要がある
+async function detectObiRegion(page, renderedCanvas, userRotation = 0) {
+  // PDFネイティブ回転 + ユーザー回転 = レンダリング時と同じ最終回転
+  // pdf.jsの getViewport({rotation}) は ネイティブ回転に追加で rotation を加算する
+  const viewport = page.getViewport({ scale: 1, rotation: userRotation });
+  const pageH = viewport.height;
+  const pageW = viewport.width;
+  const totalRotation = (page.rotate + userRotation + 360) % 360;
+  console.log(`[V2] viewport: ${pageW}x${pageH}, PDFネイティブ回転=${page.rotate}°, ユーザー回転=${userRotation}°, 最終=${totalRotation}°`);
+  const tc = await page.getTextContent();
+
+  // ===== ① テキストベースか画像ベースか判定 =====
+  const isImgPage = isImageBasedPage(tc);
+  console.log(`[V2] ① ページタイプ: ${isImgPage ? '画像ベース' : 'テキストベース'}`);
+
+  // ===== ② テキストアイテム統一取得 =====
+  let textItems = [];
+  if (!isImgPage) {
+    // PDF テキストレイヤーから取得
+    // viewport.convertToViewportPoint() を使ってPDF user space → viewport space に変換
+    // これでネイティブ回転＋ユーザー回転が両方反映される
+    for (const item of tc.items) {
+      const str = (item.str || '').trim();
+      if (!str) continue;
+      const tx = item.transform;
+      const fontSize = Math.abs(tx[3]) || Math.abs(tx[0]) || 10;
+      // テキストの左下と右上をビューポート座標に変換
+      // pdf.jsのテキスト transform[4],[5] は左下基準
+      const itemWidth = item.width || (str.length * fontSize * 0.6);
+      const itemHeight = item.height || fontSize;
+      // 4隅をviewport座標に変換し、AABBを取る（回転対応）
+      const corners = [
+        viewport.convertToViewportPoint(tx[4], tx[5]),
+        viewport.convertToViewportPoint(tx[4] + itemWidth, tx[5]),
+        viewport.convertToViewportPoint(tx[4], tx[5] + itemHeight),
+        viewport.convertToViewportPoint(tx[4] + itemWidth, tx[5] + itemHeight)
+      ];
+      const xs = corners.map(c => c[0]);
+      const ys = corners.map(c => c[1]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      textItems.push({
+        text: str,
+        yPct: (minY / pageH) * 100,
+        xPct: (minX / pageW) * 100,
+        bottomPct: (maxY / pageH) * 100,
+        widthPct: ((maxX - minX) / pageW) * 100,
+        heightPct: ((maxY - minY) / pageH) * 100,
+        fontSize,
+        source: 'pdf'
+      });
+    }
+  } else {
+    // 画像ベース → OCRで仮想テキストアイテム生成
+    console.log('[V2] ② OCRテキスト化実行...');
+    textItems = await ocrToTextItems(renderedCanvas);
+    console.log(`[V2] ② OCR結果: ${textItems.length}件のテキスト行`);
+  }
+
+  // ===== ③ 業者アイテム抽出 =====
+  const brokerItems = extractBrokerItems(textItems);
+  console.log(`[V2] ③ 業者アイテム: ${brokerItems.length}件`,
+    brokerItems.map(b => `[${b.brokerTypes.join(',')}] "${b.text.substring(0, 20)}" Y=${b.yPct.toFixed(1)}%`).join(' | '));
+
+  // ===== ④ QRコード検出 =====
+  const qrResult = detectQRCodes(renderedCanvas);
+  const qrCodes = qrResult.found ? qrResult.codes : [];
+  if (qrCodes.length > 0) {
+    console.log(`[V2] ④ QRコード: ${qrCodes.length}個 Y=${qrCodes[0].topPct.toFixed(1)}%~${qrCodes[0].bottomPct.toFixed(1)}%`);
+  } else {
+    console.log('[V2] ④ QRコード: なし');
+  }
+
+  // ===== ④.5 混在ページ対策 =====
+  // テキストベースページで「業者アイテムが下部にない」場合、
+  // 帯部分が画像化されている可能性が高い（売主情報が縦書きで本文中に、業者帯は画像）
+  // → 下部30%を追加でOCRして、画像化された業者情報を捕捉
+  const bottomItems = brokerItems.filter(b => b.yPct >= 70);
+  const needsBottomOcr = !isImgPage && renderedCanvas && bottomItems.length === 0 && qrCodes.length === 0;
+  if (needsBottomOcr) {
+    console.log('[V2] ④.5 テキストページだが下部に業者アイテムなし → 下部30%をOCRして画像帯を探索');
+    try {
+      const cropTopPct = 70;
+      const cropY = Math.floor(renderedCanvas.height * cropTopPct / 100);
+      const cropH = renderedCanvas.height - cropY;
+      if (cropH >= 80) {
+        const bottomCanvas = document.createElement('canvas');
+        bottomCanvas.width = renderedCanvas.width;
+        bottomCanvas.height = cropH;
+        const bctx = bottomCanvas.getContext('2d');
+        bctx.drawImage(renderedCanvas, 0, cropY, renderedCanvas.width, cropH, 0, 0, renderedCanvas.width, cropH);
+        const bottomResult = await _paddleOcrCanvas(bottomCanvas);
+        if (bottomResult && bottomResult.lines && bottomResult.lines.length > 0) {
+          const ocrItems = [];
+          for (const line of bottomResult.lines) {
+            if (!line.text || !line.frame || typeof line.frame.top !== 'number') continue;
+            const f = line.frame;
+            const topY = cropY + f.top;
+            const bottomY = cropY + f.top + f.height;
+            ocrItems.push({
+              text: line.text,
+              yPct: (topY / renderedCanvas.height) * 100,
+              xPct: (f.left / renderedCanvas.width) * 100,
+              bottomPct: (bottomY / renderedCanvas.height) * 100,
+              widthPct: (f.width / renderedCanvas.width) * 100,
+              heightPct: (f.height / renderedCanvas.height) * 100,
+              fontSize: f.height,
+              source: 'ocr_hybrid',
+              confidence: line.score || 0
+            });
+          }
+          const ocrBrokerItems = extractBrokerItems(ocrItems);
+          if (ocrBrokerItems.length > 0) {
+            console.log(`[V2] ④.5 下部OCRで ${ocrBrokerItems.length}件の業者アイテム発見 → 既存リストにマージ`);
+            // テキストアイテムにもマージ（保護判定用）
+            for (const item of ocrItems) textItems.push(item);
+            for (const item of ocrBrokerItems) brokerItems.push(item);
+          } else {
+            console.log('[V2] ④.5 下部OCRで業者アイテムなし');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[V2] ④.5 下部OCRフォールバック失敗:', e);
     }
   }
 
-  if (!clearRegion && !text.found && paths.hLines.length > 0) {
-    const lowerLines = paths.hLines.filter(l => l.yPct >= 70 && l.widthPct >= 50);
-    if (lowerLines.length > 0) {
-      lowerLines.sort((a, b) => a.yPct - b.yPct);
-      const lineY = lowerLines[0].yPct;
-
-      const lowerTexts = allTextItems.filter(t => t.yPct >= lineY - 2 && t.yPct <= 100);
-      let hasBrokerKw = false;
-      for (const t of lowerTexts) {
-        const s = t.str;
-        if (ANCHOR_STRONG.some(k => s.includes(k)) ||
-          ANCHOR_MEDIUM.some(k => s.includes(k)) ||
-          BROKER_KW.some(k => s.includes(k))) {
-          hasBrokerKw = true;
-          break;
-        }
-      }
-
-      if (hasBrokerKw) {
-        brokerLine = lowerLines[0];
-        clearRegion = {
-          detected: true,
-          method: 'line',
-          clearTopPct: brokerLine.yPct,
-          clearBottomPct: 100,
-          clearLeftPct: 0,
-          clearRightPct: 100,
-          isFullWidth: brokerLine.widthPct >= 90,
-          line: brokerLine
+  // --- 業者アイテムもQRもなし ---
+  if (brokerItems.length === 0 && qrCodes.length === 0) {
+    // 画像ページ → ピクセルベースのフォールバック検出を試行
+    if (isImgPage && renderedCanvas) {
+      console.log('[V2] 画像ページ: OCR未検出 → ピクセルフォールバック実行');
+      const pixelResult = detectObiBandByPixels(renderedCanvas);
+      if (pixelResult.found && pixelResult.heightPct >= 3 && pixelResult.topPct >= 50) {
+        console.log(`[V2] ピクセルフォールバック成功: Y=${pixelResult.topPct.toFixed(1)}%~100% (H=${pixelResult.heightPct.toFixed(1)}%)`);
+        return {
+          detected: true, method: 'v2_pixel_fallback', obiType: 'normal',
+          topPct: pixelResult.topPct, bottomPct: 100,
+          heightPct: pixelResult.heightPct,
+          clearTopPct: pixelResult.topPct, clearBottomPct: 100,
+          clearLeftPct: 0, clearRightPct: 100,
+          isFullWidth: true,
+          brokerItems: [], qrCodes: [],
+          isImageBased: isImgPage
         };
       }
+      console.log('[V2] ピクセルフォールバックも未検出');
     }
-  }
-
-  if (!clearRegion && text.found) {
-    let clearTopPct = text.topPct;
-    let method = 'text';
-
-    if (logos.found && logos.topPct < clearTopPct && logos.topPct >= 70) {
-      clearTopPct = logos.topPct;
-      method = 'text+logo';
-    }
-    if (images.found && images.topPct < clearTopPct && images.topPct >= clearTopPct - 15) {
-      clearTopPct = images.topPct;
-      method += '+img';
-    }
-
-    clearTopPct = Math.max(55, Math.min(95, clearTopPct - 1.5));
-    const clearBotPct = text.botPct ? Math.min(100, text.botPct + 1.0) : 100;
-    clearRegion = {
-      detected: true,
-      method,
-      clearTopPct,
-      clearBottomPct: clearBotPct,
-      clearLeftPct: 0,
-      clearRightPct: 100,
-      isFullWidth: true
-    };
-
-  } else if (!clearRegion && (logos.found || images.found || (pixel.found && pixel.boundaryPct > 75))) {
-    let clearTopPct = logos.found ? logos.topPct : images.found ? images.topPct : pixel.boundaryPct;
-    let method = logos.found ? 'logo' : images.found ? 'image' : 'pixel';
-    clearTopPct = Math.max(58, Math.min(95, clearTopPct - 1.5));
-    clearRegion = {
-      detected: true,
-      method,
-      clearTopPct,
-      clearBottomPct: 100,
-      clearLeftPct: 0,
-      clearRightPct: 100,
-      isFullWidth: true
-    };
-  }
-
-  if (!clearRegion) {
-    const midBand = detectMidPageBand(renderedCanvas);
-    if (midBand.found) {
-      const isImgPage = isImageBasedPage(tc);
-
-      if (!isImgPage) {
-        const bandTexts = allTextItems.filter(t =>
-          t.yPct >= midBand.topPct - 2 && t.yPct <= midBand.bottomPct + 2);
-        const hasBrokerKw = bandTexts.some(t => {
-          const s = t.str || t.text || '';
-          return ANCHOR_STRONG.some(k => s.includes(k)) ||
-            ANCHOR_MEDIUM.some(k => s.includes(k)) ||
-            BROKER_KW.some(k => s.includes(k)) ||
-            /\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4}/.test(s);
-        });
-        if (hasBrokerKw) {
-          clearRegion = {
-            detected: true,
-            method: 'mid_band',
-            clearTopPct: midBand.topPct,
-            clearBottomPct: midBand.bottomPct,
-            clearLeftPct: 0,
-            clearRightPct: 100,
-            isFullWidth: true
-          };
-          obiType = 'mid_band';
-        }
-      }
-    }
-  }
-
-  if (!clearRegion && paths.hLines.length > 0) {
-    const midLines = paths.hLines.filter(l => l.yPct >= 25 && l.yPct <= 70 && l.widthPct >= 50);
-    if (midLines.length > 0) {
-      midLines.sort((a, b) => Math.abs(a.yPct - 50) - Math.abs(b.yPct - 50));
-      const midLine = midLines[0];
-    }
-  }
-
-  if (!clearRegion) {
-    const isImgPage = isImageBasedPage(tc);
-    const pixelBand = detectObiBandByPixels(renderedCanvas);
-
-    if (pixelBand.found) {
-      if (!isImgPage) {
-        const vp = page.getViewport({ scale: 1 });
-        const vpH = vp.height;
-        const searchTop = Math.max(0, pixelBand.topPct - 5);
-        const searchBottom = Math.min(100, (pixelBand.bottomPct || 100) + 2);
-        const bandItems = (tc.items || []).filter(item => {
-          const str = (item.str || '').trim();
-          if (str.length < 2) return false;
-          const yFromTop = item.transform ? (1 - item.transform[5] / vpH) * 100 : 100;
-          return yFromTop >= searchTop && yFromTop <= searchBottom;
-        });
-        const brokerKws = ['TEL', 'FAX', 'tel', 'fax', '免許', '不動産', '株式会社', '有限会社', '（株）', '(株)',
-          '宅地建物', '仲介', '媒介', '建設', 'ホーム', 'ハウス', 'リアル', 'エステート', 'プロパティ',
-          '電話', '担当', '問い合わせ', '問合せ', '手数料', '専任', '物件確認',
-          '社名', '担当者', '情報提供元', '情報提供'];
-        const phoneRe = /\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4}/;
-        const hasKw = bandItems.some(item => {
-          const s = item.str || '';
-          return brokerKws.some(kw => s.includes(kw)) || phoneRe.test(s);
-        });
-        if (hasKw) {
-          clearRegion = {
-            detected: true,
-            method: pixelBand.method || 'pixel_band',
-            clearTopPct: pixelBand.topPct,
-            clearBottomPct: pixelBand.bottomPct || 100,
-            clearLeftPct: 0,
-            clearRightPct: 100,
-            isFullWidth: true
-          };
-        }
-      }
-    }
-  }
-
-  if (!clearRegion) {
+    console.log('[V2] 業者情報未検出 → fallback');
     return {
-      detected: false, method: 'fallback', obiType: obiType || 'none',
+      detected: false, method: 'v2_no_items', obiType: 'none',
       topPct: 90, bottomPct: 100, heightPct: 10,
       clearTopPct: 90, clearBottomPct: 100,
       clearLeftPct: 0, clearRightPct: 100,
       isFullWidth: true,
-      hitCount: 0, keywords: [],
-      pixelBoundary: pixel.found ? pixel.boundaryPct : null,
-      textBoundary: null, imageBoundary: null, logoBoundary: null,
-      brokerBox: null, brokerLine: null, pathInfo: paths,
-      isImageBased: isImageBasedPage(tc)
+      brokerItems: [], qrCodes: [],
+      isImageBased: isImgPage
     };
   }
+
+  // --- 信頼度チェック: 業者アイテムが1種類のみ & QRなし → 信頼度低い ---
+  // 画像ページはOCR精度が低いため、1種類でも検出成功とする
+  const uniqueTypes = new Set(brokerItems.flatMap(b => b.brokerTypes));
+  if (uniqueTypes.size < 2 && qrCodes.length === 0 && !isImgPage) {
+    console.log(`[V2] 業者アイテム種類が少ない (${[...uniqueTypes].join(',')}) → 信頼度低、fallback`);
+    return {
+      detected: false, method: 'v2_low_confidence', obiType: 'none',
+      topPct: 90, bottomPct: 100, heightPct: 10,
+      clearTopPct: 90, clearBottomPct: 100,
+      clearLeftPct: 0, clearRightPct: 100,
+      isFullWidth: true,
+      brokerItems, qrCodes,
+      isImageBased: isImgPage
+    };
+  }
+  // 画像ページで1種類のみの場合: ピクセル検出で補強を試みる
+  if (uniqueTypes.size < 2 && qrCodes.length === 0 && isImgPage) {
+    console.log(`[V2] 画像ページ: 業者アイテム1種類 (${[...uniqueTypes].join(',')}) → ピクセル補強`);
+    const pixelResult = detectObiBandByPixels(renderedCanvas);
+    if (pixelResult.found && pixelResult.topPct >= 50) {
+      // ピクセルで帯が見つかれば、OCRの1種類と合わせて信頼度十分とみなす
+      console.log(`[V2] ピクセル補強成功 → 検出続行 (pixel Y=${pixelResult.topPct.toFixed(1)}%)`);
+    } else {
+      console.log(`[V2] 画像ページ: ピクセル補強も失敗 → fallback`);
+      return {
+        detected: false, method: 'v2_img_low_confidence', obiType: 'none',
+        topPct: 90, bottomPct: 100, heightPct: 10,
+        clearTopPct: 90, clearBottomPct: 100,
+        clearLeftPct: 0, clearRightPct: 100,
+        isFullWidth: true,
+        brokerItems, qrCodes,
+        isImageBased: isImgPage
+      };
+    }
+  }
+
+  // ===== ③.5 クラスタリング（外れ値除去） =====
+  const clustering = clusterBrokerItems(brokerItems, qrCodes);
+  const effectiveBrokerItems = clustering.mainItems.length > 0 ? clustering.mainItems : brokerItems;
+
+  // クラスタリング後に再度信頼度チェック（画像ページはスキップ — OCR精度考慮）
+  const effectiveUniqueTypes = new Set(effectiveBrokerItems.flatMap(b => b.brokerTypes));
+  if (effectiveUniqueTypes.size < 2 && qrCodes.length === 0 && clustering.mainItems.length < brokerItems.length && !isImgPage) {
+    console.log(`[V2] クラスタリング後の業者アイテム種類不足 → fallback`);
+    return {
+      detected: false, method: 'v2_clustered_low_confidence', obiType: 'none',
+      topPct: 90, bottomPct: 100, heightPct: 10,
+      clearTopPct: 90, clearBottomPct: 100,
+      clearLeftPct: 0, clearRightPct: 100,
+      isFullWidth: true,
+      brokerItems: effectiveBrokerItems, qrCodes, outliers: clustering.outliers,
+      isImageBased: isImgPage
+    };
+  }
+
+  // ===== ⑤ クラスタ内の業者アイテム + QRの矩形を算出 =====
+  const boundingRect = getBrokerBoundingRect(effectiveBrokerItems, qrCodes);
+  console.log(`[V2] ⑤ 矩形: Y=${boundingRect.topPct.toFixed(1)}%~${boundingRect.bottomPct.toFixed(1)}% ` +
+    `X=${boundingRect.leftPct.toFixed(1)}%~${boundingRect.rightPct.toFixed(1)}% ` +
+    `(H=${boundingRect.heightPct.toFixed(1)}% W=${boundingRect.widthPct.toFixed(1)}%)`);
+
+  // ===== ⑥ 帯タイプ分類 =====
+  const bandType = classifyBandType(boundingRect, effectiveBrokerItems);
+  console.log(`[V2] ⑥ 帯タイプ: ${bandType}`);
+
+  // ===== ⑦ 削除領域決定 =====
+  let clearRegion = determineClearRegion(bandType, boundingRect);
+  console.log(`[V2] ⑦ 削除領域: Y=${clearRegion.clearTopPct.toFixed(1)}%~${clearRegion.clearBottomPct.toFixed(1)}% ` +
+    `X=${clearRegion.clearLeftPct.toFixed(1)}%~${clearRegion.clearRightPct.toFixed(1)}% (${clearRegion.method})`);
+
+  // ===== ⑧ 保護アイテム確認 & 調整 =====
+  const pageImages = await getAllPageImages(page);
+  clearRegion = adjustForProtectedItems(clearRegion, textItems, pageImages, effectiveBrokerItems);
+
+  // 保護アイテム衝突で検出不能の場合
+  if (clearRegion.hasProtectedConflict) {
+    console.warn('[V2] 保護アイテム衝突 → 安全のため検出成功として返すが要注意フラグ付き');
+  }
+
+  // ===== 結果を返す =====
+  const obiType = bandType === 'bottom' ? 'normal' : bandType === 'middle' ? 'mid_band' : 'irregular';
 
   return {
     detected: true,
@@ -1758,17 +2186,14 @@ async function detectObiRegion(page, renderedCanvas) {
     clearLeftPct: clearRegion.clearLeftPct || 0,
     clearRightPct: clearRegion.clearRightPct || 100,
     isFullWidth: clearRegion.isFullWidth !== false,
-    hitCount: text.found ? text.hitCount : 0,
-    keywords: text.found ? text.keywords : [],
-    pixelBoundary: pixel.found ? pixel.boundaryPct : null,
-    textBoundary: text.found ? text.topPct : null,
-    imageBoundary: images.found ? images.topPct : null,
-    logoBoundary: logos.found ? logos.topPct : null,
-    brokerBox: brokerBox,
-    brokerLine: brokerLine,
-    pathInfo: paths,
-    ocrResult: clearRegion.ocrResult || null,
-    isImageBased: isImageBasedPage(tc)
+    brokerItems: effectiveBrokerItems,
+    outliers: clustering.outliers,
+    qrCodes,
+    boundingRect,
+    bandType,
+    protectedConflict: clearRegion.hasProtectedConflict || false,
+    protectedItems: clearRegion.protectedItems || null,
+    isImageBased: isImgPage
   };
 }
 
