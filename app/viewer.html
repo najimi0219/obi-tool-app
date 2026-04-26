@@ -2875,7 +2875,8 @@
       const hasPdf = !!pdfDoc;
       const hasOverlays = pdfPages.some(p => p.whiteBox || p.obiRect);
       const hasEditObjs = Object.values(editObjects).some(arr => arr && arr.length > 0);
-      const canSave = hasPdf && (obiProcessed || hasOverlays || hasEditObjs);
+      const pdfModified = undoStack.length > 0; // ページ削除・回転・移動等の構造変更
+      const canSave = hasPdf && (obiProcessed || hasOverlays || hasEditObjs || pdfModified);
       document.getElementById('menuOverwriteSave').classList.toggle('disabled', !canSave);
       document.getElementById('menuSavePdf').classList.toggle('disabled', !canSave);
       document.getElementById('menuPrint').classList.toggle('disabled', !hasPdf);
