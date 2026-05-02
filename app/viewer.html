@@ -4026,7 +4026,9 @@
                 }
                 sCtx.fillStyle = obj.color || '#000000';
                 const fontFamily = obj.fontFamily || "'Noto Sans JP', sans-serif";
-                const fontSize = obj.fontSize ? (obj.fontSize / 100 * sourceCanvas.height) : Math.round(oh * 0.6);
+                // obj.fontSizeは画面上のCSS px値。保存キャンバスはRENDER_SCALEで拡大されているのでスケーリングする
+                const displayH = canvas.clientHeight || (sourceCanvas.height / RENDER_SCALE);
+                const fontSize = obj.fontSize ? (obj.fontSize * sourceCanvas.height / displayH) : Math.round(oh * 0.6);
                 sCtx.font = `${fontSize}px ${fontFamily}`;
                 sCtx.textBaseline = 'top';
                 const lines = obj.text.split('\n');
@@ -4243,7 +4245,8 @@
                 }
                 tctx.fillStyle = obj.color || '#000000';
                 const fontFamily = obj.fontFamily || "'Noto Sans JP', sans-serif";
-                const fontSize = obj.fontSize ? (obj.fontSize / 100 * tc.height) : Math.round(oh * 0.6);
+                const displayH = canvas.clientHeight || (tc.height / RENDER_SCALE);
+                const fontSize = obj.fontSize ? (obj.fontSize * tc.height / displayH) : Math.round(oh * 0.6);
                 tctx.font = `${fontSize}px ${fontFamily}`;
                 tctx.textBaseline = 'top';
                 obj.text.split('\n').forEach((line, li) => {
