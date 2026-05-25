@@ -1,6 +1,6 @@
 {
   "name": "obi-tool",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "マイソク業者情報削除ツール",
   "main": "main.js",
   "scripts": {

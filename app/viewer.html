@@ -1048,6 +1048,9 @@
         <span><span id="currentPageSpan">-</span> / <span id="totalPagesSpan">-</span></span>
         <button id="nextBtn" title="次ページ"><span class="icon-svg" style="width:14px;height:14px;"><svg><use href="#i-chevron-right"/></svg></span></button>
       </div>
+      <button class="toolbar-btn" id="toolViewMode" title="ビューモード (V)" style="margin-left:8px;font-size:11px;">
+        <span class="icon-svg" style="width:14px;height:14px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>ビュー
+      </button>
     </div>
   </div>
 
@@ -1075,6 +1078,45 @@
       <div id="promoSection" style="display:none; margin-top:14px;">
         <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">キャンペーンコード</label>
         <input type="text" id="promoCodeInput" style="width:100%; padding:8px 12px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;" placeholder="CAMPAIGN2026">
+      </div>
+    </div>
+  </div>
+
+  <!-- トライアル終了→サブスク登録オーバーレイ -->
+  <div id="trialExpiredOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10001; justify-content:center; align-items:center;">
+    <div style="background:#fff; border-radius:14px; padding:40px 36px; width:420px; max-width:90vw; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+      <h2 style="margin:0 0 8px; font-size:20px; text-align:center; color:#333;">トライアル期間が終了しました</h2>
+      <p style="margin:0 0 24px; font-size:13px; text-align:center; color:#888; line-height:1.6;">引き続きObi-Toolをご利用いただくには、<br>サブスクリプションへの登録が必要です。</p>
+
+      <!-- プラン説明 -->
+      <div style="background:#f8f8f8; border-radius:10px; padding:20px; margin-bottom:20px;">
+        <div style="text-align:center; margin-bottom:12px;">
+          <span style="font-size:28px; font-weight:700; color:#d8783e;">¥500</span>
+          <span style="font-size:13px; color:#888;">/月（税込）</span>
+        </div>
+        <div style="font-size:12px; color:#666; line-height:1.8; text-align:center;">
+          全機能が利用可能 ・ いつでも解約OK
+        </div>
+      </div>
+
+      <!-- キャンペーンコード入力 -->
+      <div style="margin-bottom:20px;">
+        <label style="display:block; font-size:12px; color:#666; margin-bottom:6px;">キャンペーンコードをお持ちの方</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="trialExpiredPromoInput" style="flex:1; padding:10px 12px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;" placeholder="例: FRIEND100">
+        </div>
+        <p style="font-size:11px; color:#999; margin:6px 0 0;">紹介コードを入力すると月額料金が割引されます</p>
+      </div>
+
+      <!-- エラー/成功メッセージ -->
+      <div id="trialExpiredMsg" style="display:none; padding:8px 12px; border-radius:6px; font-size:12px; margin-bottom:16px;"></div>
+
+      <!-- サブスク開始ボタン -->
+      <button id="trialExpiredCheckoutBtn" style="width:100%; padding:14px; background:#d8783e; color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:10px;">サブスクリプションを開始する</button>
+
+      <!-- ログアウトリンク -->
+      <div style="text-align:center; margin-top:8px;">
+        <a href="#" id="trialExpiredLogout" style="font-size:12px; color:#888;">ログアウト</a>
       </div>
     </div>
   </div>
@@ -1145,6 +1187,12 @@
     </div>
   </div>
 
+  <!-- ビューモード全画面オーバーレイ -->
+  <div id="viewModeOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#525659; z-index:9998; overflow-y:auto;">
+    <div id="viewModePages" style="display:flex; flex-direction:column; align-items:center; padding:20px 0; gap:12px;"></div>
+    <button id="viewModeCloseBtn" style="position:fixed; top:12px; right:20px; z-index:9999; padding:8px 16px; background:rgba(0,0,0,0.7); color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; display:none;">✕ 閉じる (Esc)</button>
+  </div>
+
   <!-- ライセンスステータスバー -->
   <div id="licenseBar" style="display:none; height:28px; background:#f0f0f0; border-bottom:1px solid #ddd; padding:0 16px; font-size:11px; color:#666; align-items:center; gap:12px; flex-shrink:0;">
     <span id="licenseStatus">-</span>
@@ -1193,6 +1241,9 @@
     <div class="toolbar-sep"></div>
     <div class="toolbar-group">
       <span class="toolbar-label">帯</span>
+      <select id="obiImageSelector" style="font-size:11px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; max-width:100px; background:#fff; cursor:pointer;" title="帯画像を切り替え">
+        <option value="">未選択</option>
+      </select>
       <button class="toolbar-btn disabled" id="toolManualObi" title="帯を手動追加">
         <span class="icon-svg"><svg><use href="#i-layers"/></svg></span>帯追加
       </button>
@@ -1266,7 +1317,7 @@
         </div>
         <div class="empty-state" id="emptyState">
           <span class="icon-svg"><svg><use href="#i-file-text"/></svg></span>
-          <p>PDFファイルをドラッグ&ドロップ、またはメニューから開いてください</p>
+          <p>PDF・画像ファイルをドラッグ&ドロップ、またはメニューから開いてください</p>
         </div>
         <div class="canvas-container" id="canvasContainer" style="display:none;">
           <canvas id="pdfCanvas"></canvas>
@@ -2298,16 +2349,20 @@
       const file = e.dataTransfer.files[0];
       if (!file) return;
       const name = file.name.toLowerCase();
-      const imgExts = ['.jpg','.jpeg','.png','.bmp','.webp'];
+      const imgExts = ['.jpg','.jpeg','.png','.bmp','.webp','.tiff','.tif','.gif'];
+      const officeExts = ['.docx','.doc','.xlsx','.xls','.pptx','.ppt'];
       if (window.electronAPI && window.electronAPI.getPathForFile) {
         const filePath = window.electronAPI.getPathForFile(file);
         if (filePath) {
-          if (name.endsWith('.pdf')) loadPDFFromPath(filePath);
-          else if (imgExts.some(ext => name.endsWith(ext))) loadObiImageFromPath(filePath);
+          if (name.endsWith('.pdf')) { loadPDFFromPath(filePath); return; }
+          if (imgExts.some(ext => name.endsWith(ext))) { convertImageToPdfPage(file); return; }
+          if (officeExts.some(ext => name.endsWith(ext))) { showToast('Officeファイルは一度PDFに変換してからドロップしてください'); return; }
           return;
         }
       }
       if (name.endsWith('.pdf')) loadPDFFromFile(file);
+      else if (imgExts.some(ext => name.endsWith(ext))) convertImageToPdfPage(file);
+      else if (officeExts.some(ext => name.endsWith(ext))) showToast('Officeファイルは一度PDFに変換してからドロップしてください');
     });
 
     // ===== Ctrl+Scroll ズーム =====
@@ -2641,7 +2696,14 @@
       const file = e.dataTransfer.files[0];
       if (!file) return;
       const name = file.name.toLowerCase();
-      if (!name.endsWith('.pdf')) return;
+      const imgExts = ['.jpg','.jpeg','.png','.bmp','.webp','.tiff','.tif','.gif'];
+      const officeExts = ['.docx','.doc','.xlsx','.xls','.pptx','.ppt'];
+      const isPdf = name.endsWith('.pdf');
+      const isImg = imgExts.some(ext => name.endsWith(ext));
+      const isOffice = officeExts.some(ext => name.endsWith(ext));
+      if (!isPdf && !isImg && !isOffice) return;
+      if (isOffice) { showToast('Officeファイルは一度PDFに変換してからドロップしてください'); return; }
+      if (isImg) { convertImageToPdfPage(file); return; }
       // PDFが未読み込みなら通常の読み込み、既に開いていたらページ追加
       if (!pdfDoc) {
         if (window.electronAPI && window.electronAPI.getPathForFile) {
@@ -2869,14 +2931,13 @@
       }
       // Update menu states
       document.getElementById('menuRunObi').classList.toggle('disabled', !pdfDoc);
+      // 帯画像セレクター更新
+      if (typeof updateObiSelector === 'function') updateObiSelector();
     }
 
     function updateMenuStates() {
       const hasPdf = !!pdfDoc;
-      const hasOverlays = pdfPages.some(p => p.whiteBox || p.obiRect);
-      const hasEditObjs = Object.values(editObjects).some(arr => arr && arr.length > 0);
-      const pdfModified = undoStack.length > 0; // ページ削除・回転・移動等の構造変更
-      const canSave = hasPdf && (obiProcessed || hasOverlays || hasEditObjs || pdfModified);
+      const canSave = hasPdf;
       document.getElementById('menuOverwriteSave').classList.toggle('disabled', !canSave);
       document.getElementById('menuSavePdf').classList.toggle('disabled', !canSave);
       document.getElementById('menuPrint').classList.toggle('disabled', !hasPdf);
@@ -6011,6 +6072,8 @@ ${pagesHtml}
           }
         });
       });
+      // 帯画像セレクター同期
+      if (typeof updateObiSelector === 'function') updateObiSelector();
     }
 
     // 帯画像追加エリア
@@ -7503,6 +7566,244 @@ ${pagesHtml}
       if (e.key === 'Enter') document.getElementById('loginBtn').click();
     });
 
+    // ===== トライアル終了オーバーレイ =====
+    function showTrialExpiredOverlay() {
+      document.getElementById('trialExpiredOverlay').style.display = 'flex';
+      document.getElementById('trialExpiredMsg').style.display = 'none';
+      document.getElementById('trialExpiredPromoInput').value = '';
+    }
+
+    function hideTrialExpiredOverlay() {
+      document.getElementById('trialExpiredOverlay').style.display = 'none';
+    }
+
+    document.getElementById('trialExpiredCheckoutBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('trialExpiredCheckoutBtn');
+      const msgEl = document.getElementById('trialExpiredMsg');
+      const promoCode = document.getElementById('trialExpiredPromoInput').value.trim();
+
+      btn.disabled = true;
+      btn.textContent = '処理中...';
+      msgEl.style.display = 'none';
+
+      try {
+        // プロモコードがあれば先に適用
+        if (promoCode) {
+          const promoResult = await window.electronAPI.applyPromoCode(promoCode);
+          if (!promoResult.success) {
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fff0f0';
+            msgEl.style.color = '#d32f2f';
+            msgEl.textContent = promoResult.message || '無効なコードです';
+            btn.disabled = false;
+            btn.textContent = 'サブスクリプションを開始する';
+            return;
+          }
+        }
+
+        // Stripe Checkout URLを取得
+        const result = await window.electronAPI.licenseCheckout(promoCode || undefined);
+        if (result.success && result.url) {
+          // 外部ブラウザでStripe Checkoutを開く
+          await window.electronAPI.openExternal(result.url);
+          msgEl.style.display = 'block';
+          msgEl.style.background = '#f0f8ff';
+          msgEl.style.color = '#1976d2';
+          msgEl.textContent = 'ブラウザで決済ページを開きました。完了後、アプリを再起動してください。';
+          btn.textContent = '決済ページを再度開く';
+          btn.disabled = false;
+        } else {
+          msgEl.style.display = 'block';
+          msgEl.style.background = '#fff0f0';
+          msgEl.style.color = '#d32f2f';
+          msgEl.textContent = result.message || result.error || 'チェックアウトの作成に失敗しました';
+          btn.disabled = false;
+          btn.textContent = 'サブスクリプションを開始する';
+        }
+      } catch (err) {
+        msgEl.style.display = 'block';
+        msgEl.style.background = '#fff0f0';
+        msgEl.style.color = '#d32f2f';
+        msgEl.textContent = 'エラーが発生しました。インターネット接続を確認してください。';
+        btn.disabled = false;
+        btn.textContent = 'サブスクリプションを開始する';
+      }
+    });
+
+    document.getElementById('trialExpiredLogout').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await window.electronAPI.licenseLogout();
+      hideTrialExpiredOverlay();
+      updateLicenseBar(null);
+      showLoginOverlay();
+    });
+
+    // ===== ビューモード =====
+    let isViewMode = false;
+
+    document.getElementById('toolViewMode').addEventListener('click', toggleViewMode);
+
+    async function toggleViewMode() {
+      if (!pdfDoc || totalPages === 0) return;
+      if (isViewMode) {
+        exitViewMode();
+      } else {
+        await enterViewMode();
+      }
+    }
+
+    async function enterViewMode() {
+      isViewMode = true;
+      const overlay = document.getElementById('viewModeOverlay');
+      const container = document.getElementById('viewModePages');
+      const closeBtn = document.getElementById('viewModeCloseBtn');
+      container.innerHTML = '<div style="color:#ccc;font-size:14px;padding:40px;">読み込み中...</div>';
+      overlay.style.display = 'block';
+      closeBtn.style.display = 'block';
+
+      // Hide toolbar and menubar
+      document.getElementById('toolbar').style.display = 'none';
+
+      // Render all pages
+      container.innerHTML = '';
+      const maxWidth = Math.min(window.innerWidth * 0.9, 900);
+
+      for (let i = 0; i < totalPages; i++) {
+        const pd = pdfPages[i];
+        const pageDiv = document.createElement('div');
+        pageDiv.style.cssText = 'position:relative; box-shadow:0 2px 12px rgba(0,0,0,0.3); background:#fff;';
+
+        const cvs = document.createElement('canvas');
+        const ctx = cvs.getContext('2d');
+
+        if (pd.processedCanvas) {
+          const src = pd.processedCanvas;
+          const scale = maxWidth / src.width;
+          cvs.width = Math.round(src.width * scale);
+          cvs.height = Math.round(src.height * scale);
+          ctx.drawImage(src, 0, 0, cvs.width, cvs.height);
+        } else {
+          const page = pd.page;
+          const rotation = getPageRotation(i);
+          const vp = page.getViewport({ scale: 1, rotation });
+          const scale = maxWidth / vp.width;
+          const viewport = page.getViewport({ scale, rotation });
+          cvs.width = Math.round(viewport.width);
+          cvs.height = Math.round(viewport.height);
+          await page.render({ canvasContext: ctx, viewport }).promise;
+        }
+
+        // Page number label
+        const label = document.createElement('div');
+        label.style.cssText = 'text-align:center; color:#aaa; font-size:11px; padding:4px 0 8px; font-family:sans-serif;';
+        label.textContent = (i + 1) + ' / ' + totalPages;
+
+        pageDiv.appendChild(cvs);
+        container.appendChild(pageDiv);
+        container.appendChild(label);
+      }
+    }
+
+    function exitViewMode() {
+      isViewMode = false;
+      document.getElementById('viewModeOverlay').style.display = 'none';
+      document.getElementById('viewModeCloseBtn').style.display = 'none';
+      document.getElementById('toolbar').style.display = '';
+    }
+
+    document.getElementById('viewModeCloseBtn').addEventListener('click', exitViewMode);
+
+    // Escキー・Vキーでビューモード切替
+    document.addEventListener('keydown', (e) => {
+      if (isViewMode && (e.key === 'Escape' || ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey))) {
+        exitViewMode();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      // Vキーでビューモード開始（テキスト入力中は除外）
+      if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !isViewMode) {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+        toggleViewMode();
+        e.preventDefault();
+      }
+    });
+
+    // ===== 帯画像セレクター =====
+    function updateObiSelector() {
+      const sel = document.getElementById('obiImageSelector');
+      if (!sel) return;
+      const currentId = obiImages.find(e => e.img === obiImage)?.id;
+      sel.innerHTML = '<option value="">未選択</option>';
+      for (const entry of obiImages) {
+        const opt = document.createElement('option');
+        opt.value = entry.id;
+        opt.textContent = entry.name.length > 12 ? entry.name.substring(0, 12) + '...' : entry.name;
+        if (entry.id === currentId) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    document.getElementById('obiImageSelector').addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (!val) {
+        obiImage = null;
+      } else {
+        const id = parseFloat(val);
+        const entry = obiImages.find(e => e.id === id);
+        if (entry) obiImage = entry.img;
+      }
+      updateObiStatus();
+      renderObiList();
+    });
+
+    // ===== 画像→PDF変換 =====
+    async function convertImageToPdfPage(file) {
+      try {
+        showLoading('画像をPDFに変換中...');
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = url;
+        });
+
+        const jsPDFClass = window.jspdf.jsPDF;
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        const isLandscape = w > h;
+        const pdf = new jsPDFClass({
+          orientation: isLandscape ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [w, h],
+          hotfixes: ['px_scaling']
+        });
+        pdf.addImage(img, 'JPEG', 0, 0, w, h);
+        URL.revokeObjectURL(url);
+
+        const pdfBlob = pdf.output('arraybuffer');
+
+        if (!pdfDoc) {
+          // No PDF loaded - treat as new PDF
+          currentFilePath = '';
+          fileNameEl.textContent = file.name.replace(/\.[^.]+$/, '.pdf');
+          document.title = 'Obi-Tool - ' + fileNameEl.textContent;
+          await initPdfDoc(pdfBlob);
+        } else {
+          // PDF already loaded - append as new page
+          await appendPdfPages(pdfBlob, file.name);
+        }
+        hideLoading();
+        showToast('画像をPDFページとして追加しました: ' + file.name);
+      } catch (err) {
+        console.error('Image to PDF conversion error:', err);
+        hideLoading();
+        showToast('画像の変換に失敗しました');
+      }
+    }
+
     // ===== 起動時ライセンスチェック =====
     async function checkLicenseOnStartup() {
       if (!window.electronAPI || !window.electronAPI.licenseVerify) {
@@ -7525,8 +7826,7 @@ ${pagesHtml}
           showLoginOverlay();
           showLoginError('\u5225\u306e\u30c7\u30d0\u30a4\u30b9\u3067\u30ed\u30b0\u30a4\u30f3\u4e2d\u3067\u3059\u3002\u5148\u306b\u305d\u306e\u30c7\u30d0\u30a4\u30b9\u3067\u30ed\u30b0\u30a2\u30a6\u30c8\u3057\u3066\u304f\u3060\u3055\u3044');
         } else if (result.reason === 'trial_expired') {
-          showLoginOverlay();
-          showLoginError('\u30c8\u30e9\u30a4\u30a2\u30eb\u304c\u7d42\u4e86\u3057\u307e\u3057\u305f\u3002\u30b5\u30d6\u30b9\u30af\u30ea\u30d7\u30b7\u30e7\u30f3\u3092\u8cfc\u5165\u3057\u3066\u304f\u3060\u3055\u3044');
+          showTrialExpiredOverlay();
         } else if (result.reason === 'offline_expired') {
           showLoginOverlay();
           showLoginError('\u30aa\u30d5\u30e9\u30a4\u30f3\u671f\u9650\u304c\u5207\u308c\u307e\u3057\u305f\u3002\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8\u306b\u63a5\u7d9a\u3057\u3066\u518d\u8a8d\u8a3c\u3057\u3066\u304f\u3060\u3055\u3044');
@@ -7591,6 +7891,12 @@ ${pagesHtml}
           popupTitle.textContent = 'アップデート準備完了';
           popupBody.textContent = 'v' + updateState.version + ' のインストール準備ができました。再起動するとアップデートが適用されます。';
           popupActions.style.display = 'flex';
+          progressBar.style.display = 'none';
+        } else if (s === 'error') {
+          badge.style.display = 'block';
+          popupTitle.textContent = 'アップデートエラー';
+          popupBody.textContent = 'ダウンロードに失敗しました: ' + (updateState.message || '不明なエラー');
+          popupActions.style.display = 'none';
           progressBar.style.display = 'none';
         } else {
           badge.style.display = 'none';

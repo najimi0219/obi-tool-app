@@ -505,6 +505,14 @@ ipcMain.handle('cancel-subscription', async () => {
   return await licenseManager.cancelSubscription();
 });
 
+ipcMain.handle('open-external-url', async (event, url) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    shell.openExternal(url);
+    return { success: true };
+  }
+  return { success: false, message: 'Invalid URL' };
+});
+
 ipcMain.handle('get-device-info', () => {
   return { deviceId: generateDeviceId(), deviceName: getDeviceName() };
 });
@@ -675,6 +683,12 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     console.error('AutoUpdater error:', err.message);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-status', {
+        status: 'error',
+        message: err.message
+      });
+    }
   });
 }
 
