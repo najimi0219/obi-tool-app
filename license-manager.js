@@ -179,7 +179,15 @@ async function verifyLicense() {
       // トライアル期限チェック
       if (cache.status === 'trial' && cache.trialEnd) {
         if (now > new Date(cache.trialEnd)) {
-          return { valid: false, reason: 'trial_expired', license: cache };
+          // トライアル期限切れ → サーバーで最新ステータスを確認
+          // （DB側でactiveに更新されている可能性があるため）
+          const onlineResult = await verifyOnline(cache);
+          if (onlineResult.valid) return onlineResult;
+          // サーバー確認失敗（オフライン等）→ ローカル判定で trial_expired
+          if (onlineResult.reason === 'offline_expired' || !onlineResult.license) {
+            return { valid: false, reason: 'trial_expired', license: cache };
+          }
+          return onlineResult;
         }
       }
       // サブスク期限チェック
@@ -191,7 +199,16 @@ async function verifyLicense() {
       }
       return { valid: true, license: cache, offline: true };
     }
-    return { valid: false, reason: 'inactive', license: cache };
+    // trial_expired: サーバーで最新状態を確認（DB側でactive化されている可能性）
+    if (cache.status === 'trial_expired') {
+      const onlineResult = await verifyOnline(cache);
+      if (onlineResult.valid) return onlineResult;
+      if (onlineResult.reason === 'offline_expired' || !onlineResult.license) {
+        return { valid: false, reason: 'trial_expired', license: cache };
+      }
+      return onlineResult;
+    }
+    return { valid: false, reason: cache.status || 'inactive', license: cache };
   }
 
   // 30日超過 → サーバー認証必須
