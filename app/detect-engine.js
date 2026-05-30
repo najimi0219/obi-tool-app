@@ -397,25 +397,35 @@ async function detectObiImages(page) {
     const pageHeight = viewport.height;
 
     const imagePositions = [];
+    let ctmStack = [];
+    let ctm = [1, 0, 0, 1, 0, 0];
 
     for (let i = 0; i < ops.fnArray.length; i++) {
-      if (ops.fnArray[i] === 85) {
-        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
-          if (ops.fnArray[j] === 12) {
-            const args = ops.argsArray[j];
-            if (args && args.length >= 6) {
-              const imgHeight = Math.abs(args[3]);
-              const imgY = args[5];
-              const yFromTop = pageHeight - imgY;
-              const yFromTopPct = Math.min(100, Math.max(0, (yFromTop / pageHeight) * 100));
-              const hPct = (imgHeight / pageHeight) * 100;
+      const fn = ops.fnArray[i];
+      const args = ops.argsArray[i];
 
-              if (yFromTopPct >= 65 && hPct < 20 && hPct > 0.5) {
-                imagePositions.push({ yFromTopPct, hPct });
-              }
-            }
-            break;
-          }
+      if (fn === 10) { ctmStack.push([...ctm]); continue; }
+      if (fn === 11) { ctm = ctmStack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
+      if (fn === 12 && args && args.length >= 6) {
+        const [a, b, c, d, e, f] = args;
+        const [a2, b2, c2, d2, e2, f2] = ctm;
+        ctm = [
+          a * a2 + b * c2, a * b2 + b * d2,
+          c * a2 + d * c2, c * b2 + d * d2,
+          e * a2 + f * c2 + e2, e * b2 + f * d2 + f2
+        ];
+        continue;
+      }
+
+      if (fn === 85) {
+        const imgHeight = Math.sqrt(ctm[2] * ctm[2] + ctm[3] * ctm[3]);
+        const imgY = ctm[5];
+        const yFromTop = pageHeight - imgY;
+        const yFromTopPct = Math.min(100, Math.max(0, (yFromTop / pageHeight) * 100));
+        const hPct = (imgHeight / pageHeight) * 100;
+
+        if (yFromTopPct >= 65 && hPct < 20 && hPct > 0.5) {
+          imagePositions.push({ yFromTopPct, hPct });
         }
       }
     }
@@ -577,17 +587,23 @@ function detectPixelHLines(canvas) {
   const sampleRight = Math.floor(w * 0.98);
   const sampleWidth = sampleRight - sampleLeft;
 
-  const step = 2;
+  const step = 1; // 1px間隔でスキャン（細い罫線の検出漏れ防止）
   const rowData = [];
 
+  // 全スキャン領域を一括取得（getImageDataの呼び出し回数を1回に削減）
+  const scanHeight = h - scanStartY;
+  const fullImgData = ctx.getImageData(sampleLeft, scanStartY, sampleWidth, scanHeight).data;
+  const rowStride = sampleWidth * 4;
+
   for (let y = scanStartY; y < h; y += step) {
-    const imgData = ctx.getImageData(sampleLeft, y, sampleWidth, 1).data;
+    const rowOffset = (y - scanStartY) * rowStride;
     let darkPixels = 0;
     let totalSamples = 0;
-    const sampleStep = Math.max(1, Math.floor(sampleWidth / 200));
+    const sampleStep = Math.max(1, Math.floor(sampleWidth / 300));
 
-    for (let x = 0; x < imgData.length; x += sampleStep * 4) {
-      const r = imgData[x], g = imgData[x + 1], b = imgData[x + 2];
+    for (let x = 0; x < sampleWidth; x += sampleStep) {
+      const idx = rowOffset + x * 4;
+      const r = fullImgData[idx], g = fullImgData[idx + 1], b = fullImgData[idx + 2];
       totalSamples++;
       if (r < 150 && g < 150 && b < 150) darkPixels++;
     }
@@ -709,16 +725,24 @@ function detectPixelBoxes(canvas, pixelHLines) {
       const verticalSteps = Math.max(1, Math.floor((botY - topY) / 30));
       let vertSamples = 0;
 
+      // 一括でエッジ領域のピクセルデータを取得（大幅高速化）
+      const edgeW = checkRange * 2 + 1;
+      const edgeH = botY - topY + 1;
+      const clampedLeftX = Math.max(0, leftX - checkRange);
+      const clampedRightX = Math.max(0, Math.min(w - edgeW, rightX - checkRange));
+      const leftEdgeData = ctx.getImageData(clampedLeftX, topY, edgeW, edgeH).data;
+      const rightEdgeData = ctx.getImageData(clampedRightX, topY, edgeW, edgeH).data;
+
       for (let y = topY; y <= botY; y += verticalSteps) {
-        for (let dx = -checkRange; dx <= checkRange; dx++) {
-          const px = leftX + dx;
-          if (px < 0 || px >= w) continue;
-          const imgData = ctx.getImageData(px, y, 1, 1).data;
-          if (imgData[0] < 150 && imgData[1] < 150 && imgData[2] < 150) {
-            leftDarkCount++;
-            break;
+        const rowOff = (y - topY) * edgeW * 4;
+        let foundDark = false;
+        for (let dx = 0; dx < edgeW; dx++) {
+          const idx = rowOff + dx * 4;
+          if (leftEdgeData[idx] < 150 && leftEdgeData[idx + 1] < 150 && leftEdgeData[idx + 2] < 150) {
+            foundDark = true; break;
           }
         }
+        if (foundDark) leftDarkCount++;
         vertSamples++;
       }
       hasLeftEdge = vertSamples > 0 && (leftDarkCount / vertSamples) > 0.4;
@@ -726,15 +750,15 @@ function detectPixelBoxes(canvas, pixelHLines) {
       let rightDarkCount = 0;
       vertSamples = 0;
       for (let y = topY; y <= botY; y += verticalSteps) {
-        for (let dx = -checkRange; dx <= checkRange; dx++) {
-          const px = rightX + dx;
-          if (px < 0 || px >= w) continue;
-          const imgData = ctx.getImageData(px, y, 1, 1).data;
-          if (imgData[0] < 150 && imgData[1] < 150 && imgData[2] < 150) {
-            rightDarkCount++;
-            break;
+        const rowOff = (y - topY) * edgeW * 4;
+        let foundDark = false;
+        for (let dx = 0; dx < edgeW; dx++) {
+          const idx = rowOff + dx * 4;
+          if (rightEdgeData[idx] < 150 && rightEdgeData[idx + 1] < 150 && rightEdgeData[idx + 2] < 150) {
+            foundDark = true; break;
           }
         }
+        if (foundDark) rightDarkCount++;
         vertSamples++;
       }
       hasRightEdge = vertSamples > 0 && (rightDarkCount / vertSamples) > 0.4;
@@ -916,10 +940,15 @@ async function _paddleOcrCanvas(canvas) {
   }
   const t0 = performance.now();
   try {
-    // JPEG (品質0.9) でサイズ削減 → IPC高速化
-    // 大きなcanvas (5000px+) でPNG base64 にすると数十MBになりIPCが詰まる
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
+    // PNG優先（OCR精度向上）。ただし大きすぎる場合はJPEG高品質にフォールバック
+    let dataUrl;
+    const totalPixels = canvas.width * canvas.height;
+    if (totalPixels > 4000000) { // 4MP超（例: 2000x2000+）→ IPCサイズ対策でJPEG
+      dataUrl = canvas.toDataURL('image/jpeg', 0.97);
+    } else {
+      dataUrl = canvas.toDataURL('image/png');
+    }
+    const base64 = dataUrl.replace(/^data:image\/[^;]+;base64,/, '');
     const sizeKB = Math.round(base64.length * 0.75 / 1024);
     console.log(`[OCR] IPC送信: canvas ${canvas.width}x${canvas.height}, JPEG ${sizeKB}KB`);
     const result = await window.electronAPI.ocrRecognize(base64);
@@ -1202,9 +1231,23 @@ async function detectPathElements(page) {
               fromRect: true
             });
           }
-        } else if (subOp === 15 || subOp === 16 || subOp === 17) {
-          argIdx += (subOp === 17 ? 4 : 6);
+        } else if (subOp === 15) {
+          // curveTo (6 args): cp1x,cp1y,cp2x,cp2y,endx,endy → 終点をLとして記録
+          pathPoints.push({ type: 'L', x: subArgs[argIdx + 4], y: subArgs[argIdx + 5] });
+          argIdx += 6;
+        } else if (subOp === 16) {
+          // curveTo2 (4 args): cpx,cpy,endx,endy
+          pathPoints.push({ type: 'L', x: subArgs[argIdx + 2], y: subArgs[argIdx + 3] });
+          argIdx += 4;
+        } else if (subOp === 17) {
+          // curveTo3 (4 args): cp1x,cp1y,endx,endy
+          pathPoints.push({ type: 'L', x: subArgs[argIdx + 2], y: subArgs[argIdx + 3] });
+          argIdx += 4;
         } else if (subOp === 18) {
+          // closePath
+          if (pathPoints.length > 0) {
+            pathPoints.push({ type: 'L', x: pathPoints[0].x, y: pathPoints[0].y });
+          }
         }
       }
       continue;
@@ -1225,7 +1268,7 @@ async function detectPathElements(page) {
 
           const lineW = Math.abs(x2 - x1);
           const lineWPct = (lineW / pageW) * 100;
-          if (Math.abs(yTop1 - yTop2) < 2 && lineWPct > 30) {
+          if (Math.abs(yTop1 - yTop2) < (pageH * 0.005) && lineWPct > 30) {
             hLines.push({
               yPct: (yTop1 / pageH) * 100,
               xStartPct: (Math.min(x1, x2) / pageW) * 100,
@@ -1253,7 +1296,7 @@ async function detectPathElements(page) {
             const yTop2 = pageH - y2;
             const lineW = Math.abs(x2 - x1);
             const lineWPct = (lineW / pageW) * 100;
-            if (Math.abs(yTop1 - yTop2) < 2 && lineWPct > 30) {
+            if (Math.abs(yTop1 - yTop2) < (pageH * 0.005) && lineWPct > 30) {
               hLines.push({
                 yPct: (yTop1 / pageH) * 100,
                 xStartPct: (Math.min(x1, x2) / pageW) * 100,
@@ -1521,6 +1564,7 @@ const PROTECTED_KW = [
 ];
 
 // Step 2: ページ全体の画像情報を取得（位置・サイズ）
+// CTMスタックを追跡して、ネストされた変換を正しく合成する
 async function getAllPageImages(page) {
   try {
     const ops = await page.getOperatorList();
@@ -1529,29 +1573,45 @@ async function getAllPageImages(page) {
     const pageW = vp.width;
     const images = [];
 
+    let ctmStack = [];
+    let ctm = [1, 0, 0, 1, 0, 0];
+
+    function multiplyMatrix(a, b) {
+      return [
+        a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3],
+        a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3],
+        a[4] * b[0] + a[5] * b[2] + b[4], a[4] * b[1] + a[5] * b[3] + b[5]
+      ];
+    }
+
     for (let i = 0; i < ops.fnArray.length; i++) {
-      if (ops.fnArray[i] === 85) { // paintImageXObject
-        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
-          if (ops.fnArray[j] === 12) { // transform
-            const a = ops.argsArray[j];
-            if (a && a.length >= 6) {
-              const imgW = Math.abs(a[0]);
-              const imgH = Math.abs(a[3]);
-              const imgX = a[4];
-              const imgY = a[5];
-              const yFromTop = pageH - imgY;
-              images.push({
-                yPct: (yFromTop / pageH) * 100,
-                xPct: (imgX / pageW) * 100,
-                hPct: (imgH / pageH) * 100,
-                wPct: (imgW / pageW) * 100,
-                bottomPct: ((yFromTop + imgH) / pageH) * 100,
-                rightPct: ((imgX + imgW) / pageW) * 100,
-                area: (imgH / pageH) * (imgW / pageW) * 10000 // %²
-              });
-            }
-            break;
-          }
+      const fn = ops.fnArray[i];
+      const args = ops.argsArray[i];
+
+      if (fn === 10) { ctmStack.push([...ctm]); continue; }
+      if (fn === 11) { ctm = ctmStack.pop() || [1, 0, 0, 1, 0, 0]; continue; }
+      if (fn === 12 && args && args.length >= 6) {
+        ctm = multiplyMatrix(args, ctm);
+        continue;
+      }
+
+      if (fn === 85) { // paintImageXObject
+        // CTMが画像の変換を含んでいる（直前のtransformが既にCTMに合成済み）
+        const imgW = Math.sqrt(ctm[0] * ctm[0] + ctm[1] * ctm[1]);
+        const imgH = Math.sqrt(ctm[2] * ctm[2] + ctm[3] * ctm[3]);
+        const imgX = ctm[4];
+        const imgY = ctm[5];
+        const yFromTop = pageH - imgY;
+        if (imgW > 0.5 && imgH > 0.5) {
+          images.push({
+            yPct: (yFromTop / pageH) * 100,
+            xPct: (imgX / pageW) * 100,
+            hPct: (imgH / pageH) * 100,
+            wPct: (imgW / pageW) * 100,
+            bottomPct: ((yFromTop + imgH) / pageH) * 100,
+            rightPct: ((imgX + imgW) / pageW) * 100,
+            area: (imgH / pageH) * (imgW / pageW) * 10000
+          });
         }
       }
     }
@@ -1955,10 +2015,22 @@ async function detectObiRegion(page, renderedCanvas, userRotation = 0) {
       const str = (item.str || '').trim();
       if (!str) continue;
       const tx = item.transform;
-      const fontSize = Math.abs(tx[3]) || Math.abs(tx[0]) || 10;
+      // フォントサイズ: 変換行列のスケール成分（回転対応）
+      const fontSize = Math.sqrt(tx[0] * tx[0] + tx[1] * tx[1]) || Math.abs(tx[3]) || 10;
       // テキストの左下と右上をビューポート座標に変換
       // pdf.jsのテキスト transform[4],[5] は左下基準
-      const itemWidth = item.width || (str.length * fontSize * 0.6);
+      // CJK文字（全角）は幅≒1.0、ASCII（半角）は幅≒0.5で推定
+      let estimatedWidth = 0;
+      if (!item.width) {
+        for (const ch of str) {
+          const code = ch.codePointAt(0);
+          // CJK統合漢字、ひらがな、カタカナ、全角記号等
+          const isCJK = (code >= 0x3000 && code <= 0x9FFF) || (code >= 0xF900 && code <= 0xFAFF) ||
+                        (code >= 0xFF01 && code <= 0xFF60) || (code >= 0x20000 && code <= 0x2FA1F);
+          estimatedWidth += isCJK ? fontSize * 1.0 : fontSize * 0.55;
+        }
+      }
+      const itemWidth = item.width || estimatedWidth || (str.length * fontSize * 0.6);
       const itemHeight = item.height || fontSize;
       // 4隅をviewport座標に変換し、AABBを取る（回転対応）
       const corners = [
