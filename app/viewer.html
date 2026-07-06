@@ -2914,6 +2914,7 @@
                 const entry = { id: Date.now(), name: result.name, img, dataURL: url, lockAspect: true };
                 obiImages.push(entry);
                 updateObiStatus();
+                rebakeObiPages();
                 window.electronAPI.saveObiImage(result.data, result.name);
                 showToast('帯画像を登録しました');
               };
@@ -3813,6 +3814,7 @@
             const entry = { id: Date.now(), name: result.name, img, dataURL: url, lockAspect: true };
             obiImages.push(entry);
             updateObiStatus();
+            rebakeObiPages();
             window.electronAPI.saveObiImage(result.data, result.name);
             showToast('帯画像を登録しました');
           };
@@ -4058,6 +4060,8 @@
       if (!pdfDoc) { showToast('PDFを読み込んでください'); return; }
       showLoading('PDFを生成中...');
       try {
+        // 帯切り替え直後の再焼き付けが走っていれば完了を待つ
+        if (obiRebakePromise) await obiRebakePromise;
         const jsPDF = window.jspdf.jsPDF;
         const firstPage = pdfPages[0].page;
         const firstVP = firstPage.getViewport({ scale: 1, rotation: getPageRotation(0) });
@@ -4109,7 +4113,7 @@
                 }
                 sCtx.fillStyle = obj.color || '#000000';
                 const fontFamily = obj.fontFamily || "'Noto Sans JP', sans-serif";
-                // obj.fontSizeは画面上のCSS px値。RENDER_SCALEで直接スケーリング（ビューポート非依存）
+                // obj.fontSizeはPDF基準サイズ(scale=1.0)のpx値。RENDER_SCALEのキャンバスに合わせて拡大
                 const fontSize = obj.fontSize ? Math.round(obj.fontSize * RENDER_SCALE) : Math.round(oh * 0.6);
                 sCtx.font = `${fontSize}px ${fontFamily}`;
                 sCtx.textBaseline = 'top';
@@ -4283,6 +4287,7 @@
     async function executePrint(pageIndices, quality) {
       showLoading('印刷準備中...', `${pageIndices.length}ページを処理しています`);
       try {
+        if (obiRebakePromise) await obiRebakePromise;
         const printScale = quality === 'high' ? RENDER_SCALE : Math.max(1, RENDER_SCALE * 0.6);
         const pageImages = [];
 
@@ -4832,10 +4837,49 @@ ${pagesHtml}
       updateThumbnailForPage(pageIdx);
     }
 
+    // 帯画像の切り替え後、帯が焼き付け済みの全ページを現在の帯画像で再焼き付けする。
+    // 保存/印刷/エクスポートは processedCanvas をそのまま使うため、
+    // 再焼き付けしないと画面（DOMオーバーレイ）は新しい帯なのに出力は古い帯になる
+    let obiRebakePromise = null;
+    function rebakeObiPages() {
+      const myGen = loadGeneration, myTab = activeTabId;
+      obiRebakePromise = (async () => {
+        for (let i = 0; i < pdfPages.length; i++) {
+          if (myGen !== loadGeneration || myTab !== activeTabId) return;
+          if (pdfPages[i].obiRect) await reRenderProcessedPage(i);
+        }
+      })();
+      return obiRebakePromise;
+    }
+
+    // アクティブな帯画像をディスクへ永続化（次回起動時に復元される）。
+    // 未選択なら保存済み帯を削除する
+    async function persistActiveObiImage() {
+      if (!window.electronAPI || !window.electronAPI.saveObiImage) return;
+      try {
+        const entry = getActiveObiEntry();
+        if (!entry) {
+          if (window.electronAPI.clearObiImage) await window.electronAPI.clearObiImage();
+          return;
+        }
+        const res = await fetch(entry.dataURL || entry.img.src);
+        const buf = await res.arrayBuffer();
+        window.electronAPI.saveObiImage(buf, entry.name);
+      } catch(e) { console.error('obi persist error:', e); }
+    }
+
     // ===== 編集オブジェクト (画像・テキスト・図形) =====
     function getPageEditObjects() {
       if (!editObjects[currentPage]) editObjects[currentPage] = [];
       return editObjects[currentPage];
+    }
+
+    // obj.fontSize は PDF基準サイズ(scale=1.0)でのpx値。
+    // 画面上では現在の表示倍率に合わせて拡縮する（保存時の ×RENDER_SCALE と相対サイズが一致する）
+    function editTextScreenPx(fontSize) {
+      const fs = fontSize || 14;
+      if (!canvas.height || !canvas.clientHeight) return fs;
+      return fs * RENDER_SCALE * canvas.clientHeight / canvas.height;
     }
 
     // テキストの表示サイズを計測してPct値を返す
@@ -4843,7 +4887,7 @@ ${pagesHtml}
       const dW = canvas.clientWidth || canvas.width;
       const dH = canvas.clientHeight || canvas.height;
       const span = document.createElement('span');
-      span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-size:${fontSize}px;font-family:${fontFamily};padding:4px;`;
+      span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-size:${editTextScreenPx(fontSize)}px;font-family:${fontFamily};padding:4px;`;
       span.textContent = text || 'テキスト';
       document.body.appendChild(span);
       const tw = span.offsetWidth + 16; // padding + 余白
@@ -4866,7 +4910,7 @@ ${pagesHtml}
       const dH = canvas.clientHeight || canvas.height;
 
       const span = document.createElement('span');
-      span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-size:${fontSize}px;font-family:${fontFamily};padding:4px;`;
+      span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-size:${editTextScreenPx(fontSize)}px;font-family:${fontFamily};padding:4px;`;
       document.body.appendChild(span);
       // 最も長い行の幅を取得
       let maxW = 0;
@@ -4901,8 +4945,8 @@ ${pagesHtml}
       };
       if (type === 'text') {
         // テキストの初期サイズを文字幅から計算
-        const fontSize = obj.fontSize || 14;
-        const measuredSize = measureTextBox(obj.text || 'テキスト', fontSize, obj.fontFamily || 'Noto Sans JP, sans-serif');
+        obj.fontSize = 14;
+        const measuredSize = measureTextBox(obj.text || 'テキスト', obj.fontSize, obj.fontFamily || 'Noto Sans JP, sans-serif');
         obj.wPct = measuredSize.wPct;
         obj.hPct = measuredSize.hPct;
       }
@@ -5322,8 +5366,9 @@ ${pagesHtml}
             ta.className = 'edit-text';
             ta.value = obj.text || '';
             ta.style.color = obj.color || '#000000';
-            if (obj.fontSize) ta.style.fontSize = obj.fontSize + 'px';
+            ta.style.fontSize = editTextScreenPx(obj.fontSize) + 'px';
             if (obj.fontFamily) ta.style.fontFamily = obj.fontFamily;
+            el._textArea = ta;
             ta.addEventListener('input', () => {
               obj.text = ta.value;
               autoResizeTextObj(obj);
@@ -5367,7 +5412,7 @@ ${pagesHtml}
             sizeInput.value = obj.fontSize || '14'; sizeInput.title = 'フォントサイズ';
             sizeInput.addEventListener('change', () => {
               obj.fontSize = parseInt(sizeInput.value) || 14;
-              ta.style.fontSize = obj.fontSize + 'px';
+              ta.style.fontSize = editTextScreenPx(obj.fontSize) + 'px';
               autoResizeTextObj(obj);
               renderEditObjects();
             });
@@ -5569,6 +5614,11 @@ ${pagesHtml}
         el.style.top = (obj.yPct * dH / 100) + 'px';
         el.style.width = (obj.wPct * dW / 100) + 'px';
         el.style.height = (obj.hPct * dH / 100) + 'px';
+
+        // テキストのフォントサイズを表示倍率に追従させる
+        if (obj.type === 'text' && el._textArea) {
+          el._textArea.style.fontSize = editTextScreenPx(obj.fontSize) + 'px';
+        }
 
         // 直線の端点位置とSVG更新
         if (obj.type === 'line') {
@@ -6066,6 +6116,8 @@ ${pagesHtml}
             obiImage = entry.img;
             updateObiStatus();
             renderObiList();
+            rebakeObiPages();
+            persistActiveObiImage();
             showToast('帯画像を選択しました');
           }
         });
@@ -6090,6 +6142,8 @@ ${pagesHtml}
             const removed = obiImages.splice(idx, 1)[0];
             if (obiImage === removed.img) {
               obiImage = obiImages.length > 0 ? obiImages[0].img : null;
+              rebakeObiPages();
+              persistActiveObiImage();
             }
             updateObiStatus();
             renderObiList();
@@ -6131,15 +6185,14 @@ ${pagesHtml}
         img.onload = () => {
           const entry = { id: Date.now() + Math.random(), name: file.name, img, dataURL: ev.target.result, lockAspect: true };
           obiImages.push(entry);
-          if (!obiImage) obiImage = img;
+          const becameActive = !obiImage;
+          if (becameActive) obiImage = img;
           updateObiStatus();
           renderObiList();
 
-          // Persist first image
-          if (obiImages.length === 1 && window.electronAPI && window.electronAPI.saveObiImage) {
-            file.arrayBuffer().then(ab => {
-              window.electronAPI.saveObiImage(ab, file.name);
-            });
+          if (becameActive) {
+            rebakeObiPages();
+            persistActiveObiImage();
           }
         };
         img.src = ev.target.result;
@@ -6364,6 +6417,7 @@ ${pagesHtml}
     async function exportImages(pageIndices, format, scale) {
       showLoading('画像を書き出し中...');
       try {
+        if (obiRebakePromise) await obiRebakePromise;
         for (let idx = 0; idx < pageIndices.length; idx++) {
           const pi = pageIndices[idx];
           const pd = pdfPages[pi];
@@ -6389,7 +6443,8 @@ ${pagesHtml}
             outCanvas.width = sourceCanvas.width; outCanvas.height = sourceCanvas.height;
             const oCtx = outCanvas.getContext('2d');
             oCtx.drawImage(sourceCanvas, 0, 0);
-            bakeEditObjectsToCanvas(oCtx, objs, outCanvas.width, outCanvas.height);
+            const baseVp = pd.page.getViewport({ scale: 1, rotation: getPageRotation(pi) });
+            bakeEditObjectsToCanvas(oCtx, objs, outCanvas.width, outCanvas.height, outCanvas.height / baseVp.height);
             sourceCanvas = outCanvas;
           }
 
@@ -6428,7 +6483,7 @@ ${pagesHtml}
       }
     }
 
-    function bakeEditObjectsToCanvas(ctx, objs, cw, ch) {
+    function bakeEditObjectsToCanvas(ctx, objs, cw, ch, fontScale) {
       for (const obj of objs) {
         const ox = cw * obj.xPct / 100, oy = ch * obj.yPct / 100;
         const ow = cw * obj.wPct / 100, oh = ch * obj.hPct / 100;
@@ -6467,7 +6522,7 @@ ${pagesHtml}
           }
           ctx.fillStyle = obj.color || '#000000';
           const fontFamily = obj.fontFamily || "'Noto Sans JP', sans-serif";
-          const fontSize = obj.fontSize ? (obj.fontSize * ch / 100) : (oh * 0.6);
+          const fontSize = obj.fontSize ? Math.round(obj.fontSize * (fontScale || RENDER_SCALE)) : (oh * 0.6);
           ctx.font = fontSize + 'px ' + fontFamily;
           ctx.textBaseline = 'top';
           const lines = obj.text.split('\n');
@@ -7831,6 +7886,8 @@ ${pagesHtml}
       }
       updateObiStatus();
       renderObiList();
+      rebakeObiPages();
+      persistActiveObiImage();
     });
 
     // ===== 画像→PDF変換 =====
